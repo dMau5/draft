@@ -58,10 +58,10 @@ def worker(input_queue):
                 for reactant in r.reactants:
                     # if isinstance(reactant, MoleculeContainer):
                     _reactants = reactant.split()
-                    for _ in _reactants:
-                        if sum([x.charge() for x in _]):
-                            if not Molecule.structure_exists(_):
-                                Molecule(_, User[1])
+                    for molecule in _reactants:
+                        if sum([atom[-1].charge for atom in molecule.atoms()]):
+                            if not Molecule.structure_exists(molecule):
+                                Molecule(molecule, User[1])
                         else:
                             break
                     if not Molecule.structure_exists(reactant):
