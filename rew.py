@@ -1,31 +1,39 @@
 import logging
 import pickle
 from pony.orm import db_session
-from CGRtools.files import SDFread, RDFread
+from CGRtools.files import SDFread, RDFread, SDFwrite
 from digraph import CGRdbDigraph
 import networkx as nx
+from multiprocessing import Process, Queue
+from CGRdbUser import User
+from CGRdb import load_schema, Molecule
+from itertools import islice
 logging.basicConfig(level=logging.ERROR)
 
+
+# db = load_schema()
 # with open('up_graph.pickle', 'rb') as gr:
 #     print('load graph')
 #     Gr = pickle.load(gr)
 #     print('graph loaded')
-zinc = set()
-for x in range(1, 1872):
-    try:
-        with SDFread(f'zinc/{x}.sdf') as g:
-            print(x)
-            for mol in g:
-                mol.standardize()
-                zinc.add(bytes(mol))
-    except: continue
-with open('zinc.pickle', 'wb') as d:
-    pickle.dump(zinc, d)
-# with db_session:
-#     for x in Gr.nodes():
-#         if 'zinc' in Gr.nodes[x]:
-#             num += 1
-# print('num', num)
+# zinc = set()
+# for x in range(1, 1872):
+#     try:
+#         with SDFread(f'zinc/{x}.sdf') as g:
+#             print(x)
+#             for mol in g:
+#                 mol.standardize()
+#                 zinc.add(bytes(mol))
+#     except: continue
+# with open('zinc.pickle', 'wb') as d:
+#     pickle.dump(zinc, d)
+# with SDFwrite('zinc_in_graph.sdf') as z:
+#     with db_session:
+#         for x in Gr.nodes():
+#             if 'zinc' in Gr.nodes[x]:
+#                 z.write(x)
+#
+# print('num')
 # for x in range(1, 13):
 #     with SDFread(f'zinc/{x}.sdf') as f1:
 #         print(x)
@@ -42,39 +50,46 @@ with open('zinc.pickle', 'wb') as d:
 # print('num', num)
 
 
-# def worker(input_queue):
-#     for r in iter(input_queue.get, 'STOP'):
-#         try:
-#             r.standardize()
-#             with db_session:
-#                 for reactant in r.reactants:
-#                     # if isinstance(reactant, MoleculeContainer):
-#                     if not Molecule.structure_exists(reactant):
-#                         Molecule(reactant, User[1])
-#                     # g.add_edge(reactant, n)
-#                 for product in r.products:
-#                     if not Molecule.structure_exists(product):
-#                         Molecule(product, User[1])
-#         except:
-#             continue
-#
-#
-# if __name__ == '__main__':
-#     db = load_schema()
-#     with open('final.rdf', 'r', encoding='utf-8') as f:
-#         reactions = RDFread(f)
-#         print('work')
-#         # g = CGRdbDigraph()
-#         inp = Queue()
-#         for _ in range(12):
-#             Process(target=worker, args=(inp,)).start()
-#         for x in islice(reactions, 2200000, None):
-#             if not i % 100:
-#                 print(f'--------{i} done--------')
-#             inp.put(x)
-#             i += 1
-#         for _ in range(12):
-#             inp.put('STOP')
+def worker(input_queue):
+    for r in iter(input_queue.get, 'STOP'):
+        try:
+            r.standardize()
+            with db_session:
+                for reactant in r.reactants:
+                    # if isinstance(reactant, MoleculeContainer):
+                    _reactants = reactant.split()
+                    for _ in _reactants:
+                        if sum([x.charge() for x in _]):
+                            if not Molecule.structure_exists(_):
+                                Molecule(_, User[1])
+                        else:
+                            break
+                    if not Molecule.structure_exists(reactant):
+                        Molecule(reactant, User[1])
+                    # g.add_edge(reactant, n)
+                for product in r.products:
+                    if not Molecule.structure_exists(product):
+                        Molecule(product, User[1])
+        except:
+            continue
+
+
+if __name__ == '__main__':
+    i = 0
+    db = load_schema('sandbox')
+    with open('reactions_db.rdf', 'r', encoding='utf-8') as f:
+        reactions = RDFread(f)
+        print('work')
+        # g = CGRdbDigraph()
+        inp = Queue()
+        for _ in range(12):
+            Process(target=worker, args=(inp,)).start()
+        for x in reactions:
+            print(f'--------{i} done--------')
+            inp.put(x)
+            i += 1
+        for _ in range(12):
+            inp.put('STOP')
 
 # with open('up_graph.pickle', 'wb') as f:
 #     pickle.dump(Gr, f)
