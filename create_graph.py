@@ -19,7 +19,7 @@ with open('zinc.pickle', 'rb') as d:
 #                 output_queue.put(r)
 #         except:
 #             continue
-db = load_schema('sandbox', )
+db = load_schema('sandbox',)
 with open('final2.rdf', 'r', encoding='utf-8') as f:
     reactions = RDFread(f)
     print('work')
@@ -30,19 +30,55 @@ with open('final2.rdf', 'r', encoding='utf-8') as f:
             r.standardize()
             if r.reactants and r.products:
                 g.add_node(n, data=[r.meta['source_id'], r.meta['text']])
-                for reagent in r.reactants:
-                    g.add_edge(reagent, n)
-                    if bytes(reagent) in zinc:
-                        g.nodes[reagent]['zinc'] = True
+                for reactant in r.reactants:
+                    _reactants = reactant.split()
+                    if all(sum(atom.charge for t, atom in molecule.atoms()) for molecule in _reactants) \
+                            or len(_reactants) == 1:
+                        g.add_edge(reactant, n)
+                        if bytes(reactant) in zinc:
+                            g.nodes[reactant]['zinc'] = True
+                    else:
+                        other = []
+                        for molecule in _reactants:
+                            if not sum(atom.charge for t, atom in molecule.atoms()):
+                                g.add_edge(molecule, n)
+                                if bytes(molecule) in zinc:
+                                    g.nodes[molecule]['zinc'] = True
+                            else:
+                                other.append(molecule)
+                        er = other.pop()
+                        for mol in other:
+                            er |= mol
+                        g.add_edge(er, n)
+                        if bytes(er) in zinc:
+                            g.nodes[er]['zinc'] = True
                 for product in r.products:
-                    g.add_edge(n, product)
-                    if bytes(product) in zinc:
-                        g.nodes[product]['zinc'] = True
+                    _products = product.split()
+                    if all(sum(atom.charge for t, atom in molecule.atoms()) for molecule in _products) \
+                            or len(_products) == 1:
+                        g.add_edge(n, product)
+                        if bytes(product) in zinc:
+                            g.nodes[product]['zinc'] = True
+                    else:
+                        other = []
+                        for molecule in _products:
+                            if not sum(atom.charge for t, atom in molecule.atoms()):
+                                g.add_edge(n, molecule)
+                                if bytes(molecule) in zinc:
+                                    g.nodes[molecule]['zinc'] = True
+                            else:
+                                other.append(molecule)
+                        er = other.pop()
+                        for mol in other:
+                            er |= mol
+                        g.add_edge(n, er)
+                        if bytes(er) in zinc:
+                            g.nodes[er]['zinc'] = True
                 n += 1
                 print(f'{n} done')
         except:
             continue
-with open('biggest_graph.pickle', 'wb') as file:
+with open('experimental_graph.pickle', 'wb') as file:
     pickle.dump(g, file)
     print('URAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
 # if __name__ == '__main__':
