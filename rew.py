@@ -18,17 +18,17 @@ w = SDFwrite('exists.sdf')
 we = RDFwrite('similar.rdf')
 for x in range(1872):
     try:
+        print(x, ' done__')
         f = SDFread(f'zinc/{x}.sdf')
         for z_mol in f:
             z_mol.aromatize()
             if Molecule.structure_exists(z_mol):
                 w.write(z_mol)
             else:
-                mols = Molecule.find_similar(z_mol)
-                mols = [x[0].structure for x in mols if x[-1] >= 0.95]
-                r = ReactionContainer()
-                r.reactants = [z_mol]
-                r.products = mols
+                mols = Molecule.find_similar(z_mol, page=1, pagesize=1)
+                if len(mols) and mols[0][-1] >= .95:
+                    mols = [x[0].structure for x in mols if x[-1] >= 0.95]
+                r = ReactionContainer(reactants=[z_mol], products=mols)
                 we.write(r)
     except:
         continue
