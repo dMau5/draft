@@ -1,4 +1,4 @@
-import logging
+
 import pickle
 from pony.orm import db_session
 from CGRtools.containers import ReactionContainer
@@ -8,30 +8,34 @@ import networkx as nx
 from multiprocessing import Process, Queue
 from CGRdbUser import User
 from CGRdb import load_schema, Molecule
+from logging import warning, basicConfig, ERROR
 from itertools import islice
-logging.basicConfig(level=logging.ERROR)
 from CGRtools.algorithms import union
-
+# basicConfig(level=ERROR)
 
 db = load_schema('sandbox',)
 w = SDFwrite('exists.sdf')
 we = RDFwrite('similar.rdf')
-for x in range(1872):
-    try:
-        print(x, ' done__')
-        f = SDFread(f'zinc/{x}.sdf')
-        for z_mol in f:
-            z_mol.aromatize()
-            if Molecule.structure_exists(z_mol):
-                w.write(z_mol)
-            else:
-                mols = Molecule.find_similar(z_mol, page=1, pagesize=1)
-                if len(mols) and mols[0][-1] >= .95:
-                    mols = [x[0].structure for x in mols if x[-1] >= 0.95]
-                r = ReactionContainer(reactants=[z_mol], products=mols)
-                we.write(r)
-    except:
-        continue
+with db_session:
+    for x in range(1, 1872):
+        try:
+            with SDFread(f'zinc/{x}.sdf') as f:
+                print(f'do zinc/{x}.sdf')
+                for z_mol in f:
+                    try:
+                        z_mol.aromatize()
+                        if Molecule.structure_exists(z_mol):
+                            w.write(z_mol)
+                            continue
+                        mols = Molecule.find_similar(z_mol, page=1, pagesize=1)
+                        if mols and mols[0][-1] >= .95:
+                            mol = [mols[0][0].structure]
+                            r = ReactionContainer(reactants=[z_mol], products=mol)
+                            we.write(r)
+                    except:
+                        continue
+        except:
+            warning(f'open {x} ne mojet')
 # with open('2_5_graph.pickle', 'rb') as gr:
 #     print('load graph')
 #     Gr = pickle.load(gr)
