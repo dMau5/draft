@@ -13,7 +13,7 @@ with open('zinc.pickle', 'rb') as z:
 
 
 def b64(m):
-    return encodebytes(m.depict().encode()).decode().replace('\n', '')
+    pass
 
 
 def visualization(G, target):
@@ -36,6 +36,7 @@ def search_synth_paths(target, stages=3, first_number_of_paths=3):
                 info('Similar molecules not found as product')
                 raise Exception
 
-    sign = set()
+    sign = set(target)
     stack = [(target, stages)]
-
+    while stack:
+        reactions = Molecule.find_reactions_by_product(target)
