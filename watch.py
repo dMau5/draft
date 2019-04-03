@@ -1,5 +1,6 @@
 from base64 import encodebytes
 from CGRdb import load_schema, Molecule, Reaction
+from CGRdb.database import MoleculeReaction
 from CGRdbUser import User
 from json import dumps
 from logging import info
@@ -25,13 +26,13 @@ def search_synth_paths(target, stages=3, first_number_of_paths=3):
     target.aromatize()
     _target = Molecule.find_structure(target)
     if _target is None:
-        info('find_similar')
         with db_session:
-            similar_molecules = Molecule.find_similar(target, page=1, pagesize=1)
+            info('find_similar')
+            similar_molecules = Molecule.find_similar(target, page=1, pagesize=10)
             info('done')
             for pair in similar_molecules:
                 molecule = pair[0]
-                if Molecule.reactions_entities(molecule, pagesize=10, product=True):
+                if MoleculeReaction.exists(molecule=molecule, product=True):
                     _target = molecule
                     info(f'Target = {molecule.structure}, Index Tanimoto = {pair[-1]}')
                     break
@@ -39,29 +40,32 @@ def search_synth_paths(target, stages=3, first_number_of_paths=3):
         info('Similar molecules not found as product')
         raise Exception
 
-    sign = {_target}
+    seen = {_target}
     stack = [(_target, stages)]
     g = DiGraph()
     n = 0
+    added_nodes = {}
     while stack:
-        item = stack.pop(0)
-        st = item[-1] - 1
-        if st:
-            with db_session:
-                reactions = Molecule.reactions_entities(item[0], pagesize=first_number_of_paths, product=True)
-                for r in reactions:
+        mt, st = stack.pop(0)
+        st -= 1
+        with db_session:
+            reactions = mt.reactions_entities(pagesize=first_number_of_paths, product=True)
+            for r in reactions:
+                if r.id not in added_nodes:
                     g.add_node(n, data=None)
-                    for m in r.molecules:
-                        if m not in sign:
-                            number_of_mol = m.molecule
-                            sign.add(number_of_mol)
-                            structure = number_of_mol.structure
-                            if not m.is_product:
-                                stack.append((number_of_mol, st))
-                                g.add_edge(structure, n)
+                    added_nodes[r.id] = n
+                    n += 1
+                for m in r.molecules:
+                    obj_mol = m.molecule
+                    if obj_mol not in seen:
+                        seen.add(obj_mol)
+                        structure = obj_mol.structure
+                        if not m.is_product:
+                            if st:
+                                stack.append((obj_mol, st))
+                            g.add_edge(structure, n)
+                        else:
                             g.add_edge(n, structure)
-                            if bytes(structure) in zinc:
-                                g.nodes[structure]['zinc'] = 1
-        else:
-            break
+                        if bytes(structure) in zinc:
+                            g.nodes[structure]['zinc'] = 1
     return g
