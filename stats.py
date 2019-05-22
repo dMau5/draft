@@ -7,6 +7,7 @@ from pickle import load, dump
 with open('zinc.pickle', 'rb') as z:
     zinc = load(z)
 
+stats = defaultdict(dict)
 with SDFwrite('er_aromatize.sdf') as w:
     with SDFread('drugs500mw.sdf') as f:
         with db_session:
@@ -17,7 +18,6 @@ with SDFwrite('er_aromatize.sdf') as w:
                 except:
                     w.write(m)
                 molecule = Molecule.find_structure(m)
-                stats = defaultdict(dict)
                 if molecule:
                     reactions_pr = molecule.reactions_entities(pagesize=100, product=True)
                     if reactions_pr:
