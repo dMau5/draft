@@ -1,71 +1,69 @@
-from CGRtools.files import SDFread, SDFwrite
-from CGRdb import Molecule, load_schema
+from CGRtools.files import SDFread, SDFwrite, RDFread, RDFwrite
+from CGRdb import Molecule, load_schema, Reaction
+from networkx import DiGraph
 from collections import defaultdict
 from pony.orm import db_session
 from pickle import load, dump
+from watch import paths_of_synthesis_for_target_molecule
+from watch import substructure
 
+load_schema('all_patents')
 with open('zinc.pickle', 'rb') as z:
     zinc = load(z)
 
-stats = defaultdict(dict)
-with SDFwrite('er_aromatize.sdf') as w:
-    with SDFread('drugs500mw.sdf') as f:
-        with db_session:
-            for m in f:
-                m.standardize()
-                try:
-                    m.aromatize()
-                except:
-                    w.write(m)
-                molecule = Molecule.find_structure(m)
-                if molecule:
-                    reactions_pr = molecule.reactions_entities(pagesize=100, product=True)
-                    if reactions_pr:
-                        stats[molecule.structure]['is_product'] = [x.id for x in reactions_pr]
-                    reactions_re = molecule.reactions_entities(pagesize=100)
-                    if reactions_re:
-                        stats[molecule.structure]['is_reactant'] = [x.id for x in reactions_re]
-with open('stats.pickle', 'wb') as p:
-    dump(stats, p)
 
-            # patent = dict()
-            # added_reactions = set()
-            # seen = set()
-            # stack = [(molecule, 100)]
-            # while stack:
-            #     mt, st = stack.pop(0)
-            #     st -= 1
-            #     reactions = mt.reactions_entities(pagesize=100, product=True)
-            #     for r in reactions:
-            #         if r.id not in added_reactions:
-            #             data = list(r.metadata)[0].data
-            #             year = [x for x in data['text'].split(' ') if len(x) == 4]
-                        # for y in year:
-                        #     try:
-                        #         patent[r.id] = int(y)
-                        #     except:
-                        #         pass
-                        # if st == 99:
-                        #     single[mt.id].add(r.id)
-                        # elif st == 98:
-                        #     double[mt.id].add(r.id)
-                        # elif st == 97:
-                        #     triple[mt.id].add(r.id)
-                        # g.add_node(n, data=f"{data['source_id']}, {data['text']}".replace('+\n', ''))
-                        # g.add_edge(n, mt.structure)
-                        # added_reactions.add(r.id)
-                    # else:
-                    #     continue
-                    # for m in r.molecules:
-                    #     obj_mol = m.molecule
-                    #     structure = obj_mol.structure
-                    #     if not m.is_product:
-                    #         if st and obj_mol not in seen:
-                    #             seen.add(obj_mol)
-                    #             stack.append((obj_mol, st))
-                            # g.add_edge(structure, n)
-                        # else:
-                            # g.add_edge(n, structure)
-                        # if bytes(structure) in zinc:
-                        #     g.nodes[structure]['zinc'] = 1
-                    # n += 1
+drugs_in_reactions = []
+with SDFread('drugs_in_patents_as_product.sdf') as d:
+    with SDFwrite('trusted_drugs.sdf') as w:
+        with db_session:
+            for drug in d:
+                drug.aromatize()
+                drug.standardize()
+                drug.implicify_hydrogens()
+                drug_in_db = Molecule.find_structure(drug)
+                seen = set(drug_in_db)
+                stack = [(drug_in_db, 50)]
+                added_reactions = set()
+                g = DiGraph()
+                n = 0
+                zzz = False
+                paths = 0
+                while stack:
+                    mt, st = stack.pop(0)
+                    st -= 1
+                    reactions = mt.reactions_entities(pagesize=20, product=True)
+                    for r in reactions:
+                        if r.id in added_reactions:
+                            continue
+                        added_reactions.add(r.id)
+                        mooleecuulees = [x.molecule for x in r.molecules]
+                        reactants = [x.structure for x in mooleecuulees if not x.is_product]
+                        if all(bytes(x) in zinc for x in reactants):
+                            zzz = True
+                            data = [x.data['source_id'] for x in list(r.metadata)]
+                            g.add_node(n, data=data)
+                            g.add_edge(n, mt.structure)
+                            for m in r.molecules:
+                                obj_mol = m.molecule
+                                structure = obj_mol.structure
+                                if not m.is_product:
+                                    g.add_edge(structure, n)
+                                else:
+                                    g.add_edge(n, structure)
+                        else:
+                            for m2 in r.molecules:
+                                if not m2.is_product:
+                                    obj_mol = m2.molecule
+                                    if st and obj_mol not in seen:
+                                        seen.add(obj_mol)
+                                        stack.append((obj_mol, st))
+                        if st == 49:
+                            paths += 1
+                        n += 1
+                if zzz:
+                    w.write(m)
+                    t = (m, 50 - st, paths, g)
+                    drugs_in_reactions.append(t)
+with open('all_stars.pickle', 'wb') as c:
+    dump(drugs_in_reactions, c)
+
