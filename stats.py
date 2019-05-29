@@ -22,48 +22,70 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                 drug.implicify_hydrogens()
                 drug_in_db = Molecule.find_structure(drug)
                 seen = set(drug_in_db)
-                stack = [(drug_in_db, 50)]
+                stack = [(drug_in_db, 32)]
                 added_reactions = set()
                 g = DiGraph()
                 n = 0
-                zzz = False
                 paths = 0
                 while stack:
                     mt, st = stack.pop(0)
                     st -= 1
-                    reactions = mt.reactions_entities(pagesize=20, product=True)
+                    reactions = mt.reactions_entities(pagesize=100, product=True)
                     for r in reactions:
                         if r.id in added_reactions:
                             continue
+                        data = [x.data['source_id'] for x in list(r.metadata)]
+                        g.add_node(n, data=data)
+                        g.add_edge(n, mt.structure)
                         added_reactions.add(r.id)
-                        mooleecuulees = [x.molecule for x in r.molecules]
-                        reactants = [x.structure for x in mooleecuulees if not x.is_product]
-                        if all(bytes(x) in zinc for x in reactants):
-                            zzz = True
-                            data = [x.data['source_id'] for x in list(r.metadata)]
-                            g.add_node(n, data=data)
-                            g.add_edge(n, mt.structure)
-                            for m in r.molecules:
-                                obj_mol = m.molecule
-                                structure = obj_mol.structure
-                                if not m.is_product:
-                                    g.add_edge(structure, n)
-                                else:
-                                    g.add_edge(n, structure)
-                        else:
-                            for m2 in r.molecules:
-                                if not m2.is_product:
-                                    obj_mol = m2.molecule
-                                    if st and obj_mol not in seen:
-                                        seen.add(obj_mol)
+                        for m in r.molecules:
+                            obj_mol = m.molecule
+                            structure = obj_mol.structure
+                            if not m.is_product:
+                                if st and obj_mol not in seen:
+                                    seen.add(obj_mol)
+                                    if bytes(mt.structure) not in zinc:
                                         stack.append((obj_mol, st))
-                        if st == 49:
-                            paths += 1
+                                g.add_edge(structure, n)
+                            else:
+                                g.add_edge(n, structure)
                         n += 1
-                if zzz:
-                    w.write(m)
-                    t = (m, 50 - st, paths, g)
-                    drugs_in_reactions.append(t)
-with open('all_stars.pickle', 'wb') as c:
-    dump(drugs_in_reactions, c)
+
+
+                # while stack:
+                #     mt, st = stack.pop(0)
+                #     st -= 1
+                #     reactions = mt.reactions_entities(pagesize=20, product=True)
+                #     for r in reactions:
+                #         if r.id in added_reactions:
+                #             continue
+                #         added_reactions.add(r.id)
+                #         mooleecuulees = [x.molecule for x in r.molecules]
+                #         reactants = [x.structure for x in mooleecuulees if not x.is_product]
+                #         if all(bytes(x) in zinc for x in reactants):
+                #             data = [x.data['source_id'] for x in list(r.metadata)]
+                #             g.add_node(n, data=data)
+                #             g.add_edge(n, mt.structure)
+                #             for m in r.molecules:
+                #                 obj_mol = m.molecule
+                #                 structure = obj_mol.structure
+                #                 if not m.is_product:
+                #                     g.add_edge(structure, n)
+                #                 else:
+                #                     g.add_edge(n, structure)
+                #         else:
+                #             for m2 in r.molecules:
+                #                 if not m2.is_product:
+                #                     obj_mol = m2.molecule
+                #                     if st and obj_mol not in seen:
+                #                         seen.add(obj_mol)
+                #                         stack.append((obj_mol, st))
+                #         if st == 49:
+                #             paths += 1
+                #         n += 1
+                #     w.write(m)
+                #     t = (m, 50 - st, paths, g)
+                #     drugs_in_reactions.append(t)
+# with open('all_stars.pickle', 'wb') as c:
+#     dump(drugs_in_reactions, c)
 
