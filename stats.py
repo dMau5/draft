@@ -27,7 +27,7 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                 g = DiGraph()
                 n = 0
                 paths = 0
-                subgr = []
+                subgr = [drug]
                 while stack:
                     mt, st = stack.pop(0)
                     st -= 1
@@ -42,7 +42,6 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                         components = r.molecules
                         reactants = [x.molecule for x in components if not x.is_product]
                         if all(bytes(x.structure) in zinc for x in reactants):
-                            subgr.append(drug)
                             mols = [x.molecule for x in components]
                             for x in mols:
                                 subgr.append(x.structure)
