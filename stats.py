@@ -5,9 +5,9 @@ from collections import defaultdict
 from pony.orm import db_session
 from pickle import load, dump
 from watch import paths_of_synthesis_for_target_molecule
-from watch import substructure
+from watch import visualization
 
-load_schema('all_patents')
+load_schema('all_patents', user='postgres', password='jyvt0n3', host='localhost', database='postgres')
 with open('zinc.pickle', 'rb') as z:
     zinc = load(z)
 
@@ -36,12 +36,16 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                         if r.id in added_reactions:
                             continue
                         data = [x.data['source_id'] for x in list(r.metadata)]
-                        g.add_node(n, data=data)
+                        g.add_node(n, data='; '.join(data))
                         g.add_edge(n, mt.structure)
                         added_reactions.add(r.id)
                         components = r.molecules
                         reactants = [x.molecule for x in components if not x.is_product]
                         if all(bytes(x.structure) in zinc for x in reactants):
+                            subgr.append(drug)
+                            mols = [x.molecule for x in components]
+                            for x in mols:
+                                subgr.append(x.structure)
                             subgr.append(n)
                         for m in components:
                             obj_mol = m.molecule
@@ -56,7 +60,6 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                                 g.add_edge(n, structure)
                         n += 1
                 sub = g.subgraph(subgr)
-                n = 7
 
 
                 # while stack:
