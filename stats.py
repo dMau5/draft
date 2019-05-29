@@ -14,19 +14,20 @@ with open('zinc.pickle', 'rb') as z:
 
 drugs_in_reactions = []
 with SDFread('drugs_in_patents_as_product.sdf') as d:
-    with SDFwrite('trusted_drugs.sdf') as w:
+    # with SDFwrite('trusted_drugs.sdf') as w:
         with db_session:
             for drug in d:
                 drug.aromatize()
                 drug.standardize()
                 drug.implicify_hydrogens()
                 drug_in_db = Molecule.find_structure(drug)
-                seen = set(drug_in_db)
+                seen = {drug_in_db}
                 stack = [(drug_in_db, 32)]
                 added_reactions = set()
                 g = DiGraph()
                 n = 0
                 paths = 0
+                subgr = []
                 while stack:
                     mt, st = stack.pop(0)
                     st -= 1
@@ -38,10 +39,14 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                         g.add_node(n, data=data)
                         g.add_edge(n, mt.structure)
                         added_reactions.add(r.id)
-                        for m in r.molecules:
+                        components = r.molecules
+                        reactants = [x.molecule for x in components if not x.is_product]
+                        if all(bytes(x.structure) in zinc for x in reactants):
+                            subgr.append(n)
+                        for m in components:
                             obj_mol = m.molecule
                             structure = obj_mol.structure
-                            if not m.is_product:
+                            if obj_mol in reactants:
                                 if st and obj_mol not in seen:
                                     seen.add(obj_mol)
                                     if bytes(mt.structure) not in zinc:
@@ -50,6 +55,8 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                             else:
                                 g.add_edge(n, structure)
                         n += 1
+                sub = g.subgraph(subgr)
+                n = 7
 
 
                 # while stack:
