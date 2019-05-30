@@ -22,7 +22,8 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                 drug.implicify_hydrogens()
                 drug_in_db = Molecule.find_structure(drug)
                 seen = {drug_in_db}
-                stack = [(drug_in_db, 32)]
+                stages = 32
+                stack = [(drug_in_db, stages)]
                 added_reactions = set()
                 g = DiGraph()
                 n = 0
