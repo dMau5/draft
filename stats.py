@@ -31,8 +31,9 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                     mt, st = stack.pop(0)
                     st -= 1
                     reactions = mt.reactions_entities(pagesize=100, product=True)
-                    if bytes(mt.structure) not in zinc and not st or bytes(mt.structure) not in zinc and not reactions:
-                        Exception(drug, 'paths not found')
+                    if bytes(mt.structure) not in zinc:
+                            if not st or not reactions:
+                                Exception(drug, 'paths not found')
                     for r in reactions:
                         if r.id in added_reactions:
                             continue
