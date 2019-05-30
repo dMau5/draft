@@ -50,9 +50,8 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                             if not m.is_product:
                                 if st and obj_mol not in seen:
                                     seen.add(obj_mol)
-                                    if bytes(mt.structure) not in zinc:
-                                        if structure not in zinc:
-                                            stack.append((obj_mol, st))
+                                    if bytes(mt.structure) not in zinc and bytes(structure) not in zinc:
+                                        stack.append((obj_mol, st))
                                 g.add_edge(structure, n)
                             else:
                                 g.add_edge(n, structure)
