@@ -6,8 +6,6 @@ from pony.orm import db_session
 from pickle import load, dump
 from watch import paths_of_synthesis_for_target_molecule
 from watch import visualization
-from logging import basicConfig, warning, WARNING
-basicConfig(level=WARNING)
 
 load_schema('all_patents', )
 with open('zinc.pickle', 'rb') as z:
@@ -36,7 +34,9 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                     reactions = mt.reactions_entities(pagesize=100, product=True)
                     if bytes(mt.structure) not in zinc:
                         if not st or not reactions:
-                            raise Exception(drug, 'paths not found')
+                            print(drug, 'paths not found')
+                            g.clear()
+                            break
                     for r in reactions:
                         if r.id in added_reactions:
                             continue
@@ -58,8 +58,9 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                             if bytes(structure) in zinc:
                                 g.nodes[structure]['zinc'] = 1
                         n += 1
-                t = visualization(g, drug)
-                i = 9
+                if g:
+                    t = visualization(g, drug)
+                    i = 9
 
 
                 # while stack:
