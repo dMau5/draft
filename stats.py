@@ -22,7 +22,7 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                 drug.implicify_hydrogens()
                 drug_in_db = Molecule.find_structure(drug)
                 seen = {drug_in_db}
-                stages = 32
+                stages = 3
                 stack = [(drug_in_db, stages)]
                 added_reactions = set()
                 g = DiGraph()
@@ -50,7 +50,9 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                             if not m.is_product:
                                 if st and obj_mol not in seen:
                                     seen.add(obj_mol)
-                                    if bytes(mt.structure) not in zinc and bytes(structure) not in zinc:
+                                    if mt.structure == drug:
+                                        stack.append((obj_mol, st))
+                                    elif bytes(mt.structure) not in zinc and bytes(structure) not in zinc:
                                         stack.append((obj_mol, st))
                                 g.add_edge(structure, n)
                             else:
