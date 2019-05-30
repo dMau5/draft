@@ -7,7 +7,7 @@ from pickle import load, dump
 from watch import paths_of_synthesis_for_target_molecule
 from watch import visualization
 
-load_schema('all_patents', user='postgres', password='jyvt0n3', host='localhost', database='postgres')
+load_schema('all_patents', )
 with open('zinc.pickle', 'rb') as z:
     zinc = load(z)
 
@@ -27,30 +27,23 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                 g = DiGraph()
                 n = 0
                 paths = 0
-                flag = False
-                subgr = [drug]
                 while stack:
                     mt, st = stack.pop(0)
                     st -= 1
                     reactions = mt.reactions_entities(pagesize=100, product=True)
+                    if bytes(mt.structure) not in zinc and not st or bytes(mt.structure) not in zinc and not reactions:
+                        Exception(drug, 'paths not found')
                     for r in reactions:
                         if r.id in added_reactions:
                             continue
-                        data = [x.data['source_id'] for x in list(r.metadata)]
-                        g.add_node(n, data='; '.join(data))
+                        data = list(r.metadata)[0].data
+                        g.add_node(n, data=f"{data['source_id']}, {data['text']}".replace('+\n', ''))
                         g.add_edge(n, mt.structure)
                         added_reactions.add(r.id)
-                        components = r.molecules
-                        reactants = [x.molecule for x in components if not x.is_product]
-                        if all(bytes(x.structure) in zinc for x in reactants):
-                            subgr.append(n)
-                            flag = True
-                        for m in components:
+                        for m in r.molecules:
                             obj_mol = m.molecule
                             structure = obj_mol.structure
-                            if flag:
-                                subgr.append(structure)
-                            if obj_mol in reactants:
+                            if not m.is_product:
                                 if st and obj_mol not in seen:
                                     seen.add(obj_mol)
                                     if bytes(mt.structure) not in zinc:
@@ -58,8 +51,11 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                                 g.add_edge(structure, n)
                             else:
                                 g.add_edge(n, structure)
+                            if bytes(structure) in zinc:
+                                g.nodes[structure]['zinc'] = 1
                         n += 1
-                sub = g.subgraph(subgr)
+                t = visualization(g, drug)
+                i = 9
 
 
                 # while stack:
