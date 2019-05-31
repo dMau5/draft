@@ -43,8 +43,6 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                             g.add_node(n, data=f"{data['source_id']}, {data['text']}".replace('+\n', ''))
                             g.add_edge(n, mt.structure)
                             added_reactions.add(r.id)
-                            if mt != drug_in_db:
-                                paths[path].add(n)
                             for m in r.molecules:
                                 obj_mol = m.molecule
                                 structure = obj_mol.structure
@@ -56,14 +54,14 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                                         elif bytes(mt.structure) not in zinc and bytes(structure) not in zinc:
                                             stack.append((obj_mol, st, path))
                                     g.add_edge(structure, n)
-                                    if mt == drug_in_db:
-                                        paths[n].add(structure)
-                                        paths[n].add(n)
                                 else:
                                     g.add_edge(n, structure)
-                                    if mt == drug_in_db:
-                                        paths[n].add(structure)
-                                        paths[n].add(n)
+                                if mt == drug_in_db:
+                                    paths[n].add(structure)
+                                    paths[n].add(n)
+                                else:
+                                    paths[path].add(structure)
+                                    paths[path].add(n)
                                 if bytes(structure) in zinc:
                                     g.nodes[structure]['zinc'] = 1
                             n += 1
@@ -71,6 +69,7 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                 print(ter)
                 if len(g) > 1:
                     t = (drug_in_db.id, g, drug.meta)
+                    y = visualization(g, drug)
                     drugs_in_reactions.append(t)
                     w.write(drug)
                 else:
