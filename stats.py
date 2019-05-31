@@ -35,9 +35,7 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                         reactions = mt.reactions_entities(pagesize=100, product=True)
                         if bytes(mt.structure) not in zinc:
                             if not st or not reactions or any(x.id in added_reactions for x in reactions):
-                                print(drug, 'paths not found')
-                                g.remove_nodes_from(paths[paths])
-                                break
+                                g.remove_nodes_from(paths[path])
                         for r in reactions:
                             if r.id in added_reactions:
                                 continue
@@ -45,6 +43,8 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                             g.add_node(n, data=f"{data['source_id']}, {data['text']}".replace('+\n', ''))
                             g.add_edge(n, mt.structure)
                             added_reactions.add(r.id)
+                            if mt != drug_in_db:
+                                paths[path].add(n)
                             for m in r.molecules:
                                 obj_mol = m.molecule
                                 structure = obj_mol.structure
@@ -58,28 +58,33 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                                     g.add_edge(structure, n)
                                     if mt == drug_in_db:
                                         paths[n].add(structure)
+                                        paths[n].add(n)
                                 else:
                                     g.add_edge(n, structure)
                                     if mt == drug_in_db:
                                         paths[n].add(structure)
+                                        paths[n].add(n)
                                 if bytes(structure) in zinc:
                                     g.nodes[structure]['zinc'] = 1
                             n += 1
                 ter += 1
                 print(ter)
-                if g:
+                if len(g) > 1:
                     t = (drug_in_db.id, g, drug.meta)
                     drugs_in_reactions.append(t)
                     w.write(drug)
+                else:
+                    print(drug, 'paths not found')
 
-# with open('stats.pickle', 'rb') as p:
-#     with db_session:
-#         s = load(p)
-#         for x in s:
-#             idd, g, meta = x
-#             drug = Molecule[idd]
-#             t = visualization(g, drug.structure)
-#             b = 6
+with open('stats.pickle', 'wb') as p:
+    dump(drugs_in_reactions, p)
+    # with db_session:
+    #     s = load(p)
+    #     for x in s:
+    #         idd, g, meta = x
+    #         drug = Molecule[idd]
+    #         t = visualization(g, drug.structure)
+    #         b = 6
 
 
                 # while stack:
