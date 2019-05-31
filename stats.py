@@ -25,8 +25,9 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                 g = g1.copy()
                 stack = [x for x in g1.nodes() if not isinstance(x, int) and bytes(x) not in zinc]
                 while True:
-                    for structure in stack:
+                    for n, structure in enumerate(stack):
                         if not g1._pred[structure]:
+                            stack.pop(n)
                             synky = g1._succ[structure]
                             if structure in g.nodes():
                                 g.remove_node(structure)
