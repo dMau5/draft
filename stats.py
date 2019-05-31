@@ -29,9 +29,8 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                         if not g1._pred[structure]:
                             stack.pop(n)
                             synky = g1._succ[structure]
-                            if structure in g.nodes():
-                                g.remove_node(structure)
-                                g.remove_nodes_from(synky)
+                            g.remove_node(structure)
+                            g.remove_nodes_from(synky)
                             break
                     else:
                         break
