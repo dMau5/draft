@@ -23,12 +23,13 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                 drug_in_db = Molecule.find_structure(drug)
                 g1 = paths_of_synthesis_for_target_molecule(drug_in_db, 2)
                 g = g1.copy()
-                for node in g1.nodes():
-                    if not isinstance(node, int):
-                        if not g1._pred[node] and bytes(node) not in zinc:
-                            synky = g1._succ[node]
-                            g.remove_node(node)
-                            g.remove_nodes_from(synky)
+                stack = [x for x in g1.nodes() if not isinstance(x, int) and x not in zinc]
+                while stack:
+                    structure = stack.pop(0)
+                    if not g1._pred[structure] and bytes(structure) not in zinc:
+                        synky = g1._succ[structure]
+                        g.remove_node(structure)
+                        g.remove_nodes_from(synky)
                 t = visualization(g, drug)
                 r = 6
 
