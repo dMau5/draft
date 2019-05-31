@@ -14,7 +14,7 @@ with open('zinc.pickle', 'rb') as z:
 ter = 0
 drugs_in_reactions = []
 with SDFread('drugs_in_patents_as_product.sdf') as d:
-    with SDFwrite('trusted_drugs.pickle') as w:
+    with SDFwrite('trusted_drugs.sdf') as w:
         with db_session:
             for drug in d:
                 drug.aromatize()
@@ -35,7 +35,19 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                         reactions = mt.reactions_entities(pagesize=100, product=True)
                         if bytes(mt.structure) not in zinc:
                             if not st or not reactions or any(x.id in added_reactions for x in reactions):
-                                g.remove_nodes_from(paths[path])
+                                common = set()
+                                other_del = set()
+                                for k, x in paths.items():
+                                    if k != path:
+                                        common.update(x)
+                                    if mt.structure in x:
+                                        other_del.update(x)
+                                deel = paths[path]
+                                deel.update(other_del)
+                                deel = deel.difference(common)
+                                g.remove_nodes_from(deel)
+                                stack = [x for x in stack if x[2] != path]
+                                continue
                         for r in reactions:
                             if r.id in added_reactions:
                                 continue
@@ -67,7 +79,7 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                             n += 1
                 ter += 1
                 print(ter)
-                if len(g) > 1:
+                if len(g) > 1 and g.edges():
                     t = (drug_in_db.id, g, drug.meta)
                     y = visualization(g, drug)
                     drugs_in_reactions.append(t)
@@ -78,8 +90,7 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
 with open('stats.pickle', 'wb') as p:
     dump(drugs_in_reactions, p)
     # with db_session:
-    #     s = load(p)
-    #     for x in s:
+    #     for x in drugs_in_reactions:
     #         idd, g, meta = x
     #         drug = Molecule[idd]
     #         t = visualization(g, drug.structure)
