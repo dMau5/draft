@@ -24,10 +24,10 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                 drug_in_db = Molecule.find_structure(drug)
                 g1 = paths_of_synthesis_for_target_molecule(drug_in_db, 2)
                 g = g1.copy()
-                # synky = g1._succ[drug]
-                # if synky:
-                #     g.remove_nodes_from(synky)
-                st = [x for x in g1.nodes() if not isinstance(x, int) and bytes(x) not in zinc]
+                synky = g1._succ[drug]
+                if synky:
+                    g.remove_nodes_from(synky)
+                st = [x for x in g1.nodes() if not isinstance(x, int) and bytes(x) not in zinc and x != drug]
                 while True:
                     for n, structure in enumerate(st):
                         if not g._pred[structure]:
@@ -39,18 +39,17 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                     else:
                         break
 
-                bonds = g._adj
-                seen = {drug}
-                stack = [drug]
-                while stack:
-                    mt = stack.pop(0)
-                    if mt in bonds:
-                        for i in bonds[mt].keys() - seen:
-                            stack.append(i)
-                            seen.add(i)
-                viz = g.subgraph(seen)
-                if len(viz) > 1:
-                    t = visualization(viz, drug)
+                # bonds = g._adj
+                # seen = {drug}
+                # stack = [drug]
+                # while stack:
+                #     mt = stack.pop(0)
+                #     if mt in bonds:
+                #         for i in bonds[mt].keys() - seen:
+                #             stack.append(i)
+                #             seen.add(i)
+                if g._pred[drug]:
+                    t = visualization(g, drug)
                     r = 6
 
 with open('stats.pickle', 'wb') as p:
