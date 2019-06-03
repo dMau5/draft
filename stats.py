@@ -25,30 +25,14 @@ with open('log.txt', 'w') as log:
                     print('create graph')
                     seen = {drug_in_db}
                     stages = 3
-                    stack = [(drug_in_db, stages, None)]
+                    stack = [(drug_in_db, stages)]
                     added_reactions = set()
                     g = DiGraph()
                     n = 0
-                    paths = defaultdict(set)
                     while stack:
-                        mt, st, path = stack.pop(0)
+                        mt, st = stack.pop(0)
                         st -= 1
                         reactions = mt.reactions_entities(pagesize=100, product=True)
-                        if bytes(mt.structure) not in zinc:
-                            if not st or not reactions or any(x.id in added_reactions for x in reactions):
-                                common = set()
-                                other_del = set()
-                                for k, x in paths.items():
-                                    if k != path:
-                                        common.update(x)
-                                    if mt.structure in x:
-                                        other_del.update(x)
-                                deel = paths[path]
-                                deel.update(other_del)
-                                deel = deel.difference(common)
-                                g.remove_nodes_from(deel)
-                                stack = [x for x in stack if x[2] != path]
-                                continue
                         for r in reactions:
                             if r.id in added_reactions:
                                 continue
@@ -63,18 +47,12 @@ with open('log.txt', 'w') as log:
                                     if st and obj_mol not in seen:
                                         seen.add(obj_mol)
                                         if mt == drug_in_db:
-                                            stack.append((obj_mol, st, n))
+                                            stack.append((obj_mol, st))
                                         elif bytes(mt.structure) not in zinc and bytes(structure) not in zinc:
-                                            stack.append((obj_mol, st, path))
+                                            stack.append((obj_mol, st))
                                     g.add_edge(structure, n)
                                 else:
                                     g.add_edge(n, structure)
-                                if mt == drug_in_db:
-                                    paths[n].add(structure)
-                                    paths[n].add(n)
-                                else:
-                                    paths[path].add(structure)
-                                    paths[path].add(n)
                                 if bytes(structure) in zinc:
                                     g.nodes[structure]['zinc'] = 1
                             n += 1
@@ -102,14 +80,14 @@ with open('log.txt', 'w') as log:
                                 if not g._succ[node]:
                                     g.remove_node(node)
 
-                            log.write('end == has\n\n')
-                            w.write(drug)
-                            t = (drug_in_db.id, g, drug.meta)
-                            drugs_in_reactions.append(t)
-                            # t = visualization(g, drug)
-                            # r = 6
-                        else:
-                            log.write('end == not found\n\n')
+                        log.write('end == has\n\n')
+                        w.write(drug)
+                        t = (drug_in_db.id, g, drug.meta)
+                        drugs_in_reactions.append(t)
+                        t = visualization(g, drug)
+                        r = 6
+                    else:
+                        log.write('end == not found\n\n')
                     ter += 1
                     print(ter)
 
