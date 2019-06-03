@@ -14,46 +14,73 @@ with open('zinc.pickle', 'rb') as z:
 
 ter = 0
 drugs_in_reactions = []
-with SDFread('drugs_in_patents_as_product.sdf') as d:
-    with SDFwrite('trusted_drugs.sdf') as w:
-        with db_session:
-            for drug in d:
+with open('log.txt', 'w') as log:
+    with SDFread('drugs_in_patents_as_product.sdf') as d:
+        with SDFwrite('trusted_drugs.sdf') as w:
+            with db_session:
+                # for drug in d:
+                next(d)
+                next(d)
+                drug = next(d)
+                log.write(f'start == {drug}\n')
                 drug.aromatize()
                 drug.standardize()
                 drug.implicify_hydrogens()
                 drug_in_db = Molecule.find_structure(drug)
-                g1 = paths_of_synthesis_for_target_molecule(drug_in_db, 2)
-                g = g1.copy()
-                synky = g1._succ[drug]
-                if synky:
-                    g.remove_nodes_from(synky)
-                st = [x for x in g1.nodes() if not isinstance(x, int) and bytes(x) not in zinc and x != drug]
-                while True:
-                    for n, structure in enumerate(st):
-                        if not g._pred[structure]:
-                            st.pop(n)
-                            synky = g._succ[structure]
-                            g.remove_node(structure)
-                            g.remove_nodes_from(synky)
+                print('create graph')
+                g1 = paths_of_synthesis_for_target_molecule(drug_in_db, 3)
+                print('done')
+                if not g1:
+                    log.write(f'g1 {g1}\n')
+                else:
+                    g = g1.copy()
+                    # synky = g1._succ[drug]
+                    # if synky:
+                    #     g.remove_nodes_from(synky)
+                    st = [x for x in g1.nodes() if not isinstance(x, int) and bytes(x) not in zinc and x != drug]
+                    while True:
+                        for n, structure in enumerate(st):
+                            if not g._pred[structure]:
+                                st.pop(n)
+                                synky = g._succ[structure]
+                                g.remove_node(structure)
+                                g.remove_nodes_from(synky)
+                                break
+                        else:
                             break
-                    else:
-                        break
 
-                # bonds = g._adj
-                # seen = {drug}
-                # stack = [drug]
-                # while stack:
-                #     mt = stack.pop(0)
-                #     if mt in bonds:
-                #         for i in bonds[mt].keys() - seen:
-                #             stack.append(i)
-                #             seen.add(i)
-                if g._pred[drug]:
-                    t = visualization(g, drug)
-                    r = 6
+                    bonds = g._adj
+                    seen = {drug}
+                    stack = [drug]
+                    while stack:
+                        mt = stack.pop(0)
+                        if mt in bonds:
+                            for i in bonds[mt].keys() - seen:
+                                stack.append(i)
+                                seen.add(i)
+
+                    gr = g.subgraph(seen)
+                    ter += 1
+                    print(ter)
+                    if len(gr) > 1:
+                        log.write('end == has\n\n')
+                        w.write(drug)
+                        t = (drug_in_db.id, g, drug.meta)
+                        drugs_in_reactions.append(t)
+                        # t = visualization(g, drug)
+                        # r = 6
+                    else:
+                        log.write('end == not found\n\n')
+
 
 with open('stats.pickle', 'wb') as p:
     dump(drugs_in_reactions, p)
+    # with db_session:
+    #     for x in drugs_in_reactions:
+    #         idd, g, meta = x
+    #         molecule = Molecule[idd]
+    #         t = visualization(g, molecule.structure)
+    #         r = 6
     # seen = {drug_in_db}
     # stages = 32
     # stack = [(drug_in_db, stages, None)]
