@@ -12,56 +12,64 @@ with open('zinc.pickle', 'rb') as z:
 
 ter = 0
 drugs_in_reactions = []
-with open('log.txt', 'w') as log:
-    with SDFread('drugs_in_patents_as_product.sdf') as d:
-        with SDFwrite('trusted_drugs.sdf') as w:
-            with db_session:
-                for drug in d:
-                    log.write(f'start == {drug}\n')
-                    drug.aromatize()
-                    drug.standardize()
-                    drug.implicify_hydrogens()
-                    drug_in_db = Molecule.find_structure(drug)
-                    print('create graph')
-                    seen = {drug_in_db}
-                    stages = 3
-                    stack = [(drug_in_db, stages)]
-                    added_reactions = set()
-                    g = DiGraph()
-                    n = 0
-                    while stack:
-                        mt, st = stack.pop(0)
-                        st -= 1
-                        reactions = mt.reactions_entities(pagesize=100, product=True)
-                        for r in reactions:
-                            if r.id in added_reactions:
-                                continue
-                            data = list(r.metadata)[0].data
-                            g.add_node(n, data=f"{data['source_id']}, {data['text']}".replace('+\n', ''))
-                            g.add_edge(n, mt.structure)
-                            added_reactions.add(r.id)
-                            for m in r.molecules:
-                                obj_mol = m.molecule
-                                structure = obj_mol.structure
-                                if not m.is_product:
-                                    if st and obj_mol not in seen:
-                                        seen.add(obj_mol)
-                                        if mt == drug_in_db:
-                                            stack.append((obj_mol, st))
-                                        elif bytes(mt.structure) not in zinc and bytes(structure) not in zinc:
-                                            stack.append((obj_mol, st))
-                                    g.add_edge(structure, n)
-                                else:
-                                    g.add_edge(n, structure)
-                                if bytes(structure) in zinc:
-                                    g.nodes[structure]['zinc'] = 1
-                            n += 1
-                    print('done')
+with SDFread('drugs_in_patents_as_product.sdf') as d:
+    with SDFwrite('trusted_drugs.sdf') as w:
+        with db_session:
+            for drug in d:
+                drug.aromatize()
+                drug.standardize()
+                drug.implicify_hydrogens()
+                print('start ==', drug)
+                drug_in_db = Molecule.find_structure(drug)
+                print('create graph')
+                seen = {drug_in_db}
+                stages = 32
+                stack = [(drug_in_db, stages)]
+                added_reactions = set()
+                g = DiGraph()
+                n = 0
+                while stack:
+                    mt, st = stack.pop(0)
+                    st -= 1
+                    reactions = mt.reactions_entities(pagesize=100, product=True)
+                    for r in reactions:
+                        if r.id in added_reactions:
+                            continue
+                        data = list(r.metadata)[0].data
+                        g.add_node(n, data=f"{data['source_id']}, {data['text']}".replace('+\n', ''))
+                        added_reactions.add(r.id)
+                        for m in r.molecules:
+                            obj_mol = m.molecule
+                            structure = obj_mol.structure
+                            atoms = [atom[-1].element for atom in structure.atoms()]
+                            if not m.is_product:
+                                if st and obj_mol not in seen:
+                                    seen.add(obj_mol)
+                                    if mt == drug_in_db:
+                                        stack.append((obj_mol, st))
+                                elif bytes(structure) not in zinc and bytes(structure) not in zinc \
+                                        or not atoms.count('C') <= 2 or not len(atoms) <= 6:
+                                        stack.append((obj_mol, st))
+                                g.add_edge(structure, n)
+                            else:
+                                g.add_edge(n, structure)
+                            if bytes(structure) in zinc or atoms.count('C') <= 2 or len(atoms) <= 6:
+                                g.nodes[structure]['zinc'] = 1
+                        n += 1
+                print('done')
 
+                try:
                     synky = list(g._succ[drug])
                     if synky:
                         g.remove_nodes_from(synky)
-                    st = [x for x in g.nodes() if not isinstance(x, int) and bytes(x) not in zinc and x != drug]
+
+                    st = []
+                    for x in g.nodes():
+                        if not isinstance(x, int) and x != drug:
+                            atoms = [atom[-1].element for atom in x.atoms()]
+                            if bytes(x) not in zinc or atoms.count('C') <= 2 or len(atoms) <= 6:
+                                st.append(x)
+
                     while True:
                         for n, structure in enumerate(st):
                             if not g._pred[structure]:
@@ -73,27 +81,37 @@ with open('log.txt', 'w') as log:
                         else:
                             break
 
-                    if g._pred[drug]:
-                        stack = list(g.nodes())
-                        for node in stack:
-                            if node != drug:
-                                if not g._succ[node]:
-                                    g.remove_node(node)
+                    seen = {drug}
+                    queue = [drug]
+                    while queue:
+                        start = queue.pop(0)
+                        for i in g._pred[start].keys() - seen:
+                            queue.append(i)
+                            seen.add(i)
+                        if isinstance(start, int):
+                            for i in g._succ[start]:
+                                seen.add(i)
 
-                        log.write('end == has\n\n')
+                    if len(seen) > 1:
+                        g = g.subgraph(seen)
+                        g = DiGraph(g)
                         w.write(drug)
                         t = (drug_in_db.id, g, drug.meta)
                         drugs_in_reactions.append(t)
-                        t = visualization(g, drug)
-                        r = 6
+                        # t = visualization(g, drug)
+                        # r = 6
                     else:
-                        log.write('end == not found\n\n')
-                    ter += 1
-                    print(ter)
+                        print('not found\n')
+                except:
+                    print(Exception(KeyError), drug_in_db.id)
+
+                ter += 1
+                print(ter)
 
 
 with open('stats.pickle', 'wb') as p:
     dump(drugs_in_reactions, p)
+
     # with db_session:
     #     for x in drugs_in_reactions:
     #         idd, g, meta = x
