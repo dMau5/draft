@@ -48,7 +48,7 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                                     if mt == drug_in_db:
                                         stack.append((obj_mol, st))
                                 elif bytes(structure) not in zinc and bytes(structure) not in zinc \
-                                        or not atoms.count('C') <= 2 or not len(atoms) <= 6:
+                                        and not (atoms.count('C') <= 2 or len(atoms) <= 6):
                                         stack.append((obj_mol, st))
                                 g.add_edge(structure, n)
                             else:
@@ -67,7 +67,7 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                     for x in g.nodes():
                         if not isinstance(x, int) and x != drug:
                             atoms = [atom[-1].element for atom in x.atoms()]
-                            if bytes(x) not in zinc or atoms.count('C') <= 2 or len(atoms) <= 6:
+                            if bytes(x) not in zinc and not (atoms.count('C') <= 2 or len(atoms) <= 6):
                                 st.append(x)
 
                     while True:
