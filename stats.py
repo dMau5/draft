@@ -1,7 +1,6 @@
 from CGRtools.files import SDFread, SDFwrite, RDFread, RDFwrite
 from CGRdb import Molecule, load_schema, Reaction
 from networkx import DiGraph
-from collections import defaultdict
 from pony.orm import db_session
 from pickle import load, dump
 from watch import visualization
@@ -13,9 +12,11 @@ with open('zinc.pickle', 'rb') as z:
 ter = 0
 drugs_in_reactions = []
 with SDFread('drugs_in_patents_as_product.sdf') as d:
+    drs = d.read()
+    drs = set(drs)
     with SDFwrite('trusted_drugs.sdf') as w:
         with db_session:
-            for drug in d:
+            for drug in drs:
                 drug.aromatize()
                 drug.standardize()
                 drug.implicify_hydrogens()
@@ -47,9 +48,9 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                                     seen.add(obj_mol)
                                     if mt == drug_in_db:
                                         stack.append((obj_mol, st))
-                                elif bytes(structure) not in zinc and bytes(structure) not in zinc \
+                                elif bytes(mt.structure) not in zinc and bytes(structure) not in zinc \
                                         and not (atoms.count('C') <= 2 or len(atoms) <= 6):
-                                        stack.append((obj_mol, st))
+                                    stack.append((obj_mol, st))
                                 g.add_edge(structure, n)
                             else:
                                 g.add_edge(n, structure)
@@ -70,6 +71,7 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                             if bytes(x) not in zinc and not (atoms.count('C') <= 2 or len(atoms) <= 6):
                                 st.append(x)
 
+                    st = [x for x in g.nodes() if not isinstance(x, int) and bytes(x) not in zinc and x != drug]
                     while True:
                         for n, structure in enumerate(st):
                             if not g._pred[structure]:
@@ -109,8 +111,8 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                 print(ter)
 
 
-with open('stats.pickle', 'wb') as p:
-    dump(drugs_in_reactions, p)
+with open('stats.pickle', 'rb') as p:
+    drugs_in_reactions = load(p)
 
     # with db_session:
     #     for x in drugs_in_reactions:
