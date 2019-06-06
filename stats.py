@@ -17,9 +17,6 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
     with SDFwrite('trusted_drugs.sdf') as w:
         with db_session:
             for drug in drs:
-                drug.aromatize()
-                drug.standardize()
-                drug.implicify_hydrogens()
                 print('start ==', drug)
                 drug_in_db = Molecule.find_structure(drug)
                 print('create graph')
@@ -32,7 +29,7 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                 while stack:
                     mt, st = stack.pop(0)
                     st -= 1
-                    reactions = mt.reactions_entities(pagesize=100, product=True)
+                    reactions = mt.reactions_entities(pagesize=1000, product=True)
                     for r in reactions:
                         if r.id in added_reactions:
                             continue
@@ -48,9 +45,9 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                                     seen.add(obj_mol)
                                     if mt == drug_in_db:
                                         stack.append((obj_mol, st))
-                                elif bytes(mt.structure) not in zinc and bytes(structure) not in zinc \
-                                        and not (atoms.count('C') <= 2 or len(atoms) <= 6):
-                                    stack.append((obj_mol, st))
+                                    elif bytes(mt.structure) not in zinc and bytes(structure) not in zinc \
+                                            and not (atoms.count('C') <= 2 or len(atoms) <= 6):
+                                        stack.append((obj_mol, st))
                                 g.add_edge(structure, n)
                             else:
                                 g.add_edge(n, structure)
@@ -71,7 +68,7 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                             if bytes(x) not in zinc and not (atoms.count('C') <= 2 or len(atoms) <= 6):
                                 st.append(x)
 
-                    st = [x for x in g.nodes() if not isinstance(x, int) and bytes(x) not in zinc and x != drug]
+                    # st = [x for x in g.nodes() if not isinstance(x, int) and bytes(x) not in zinc and x != drug]
                     while True:
                         for n, structure in enumerate(st):
                             if not g._pred[structure]:
@@ -111,8 +108,8 @@ with SDFread('drugs_in_patents_as_product.sdf') as d:
                 print(ter)
 
 
-with open('stats.pickle', 'rb') as p:
-    drugs_in_reactions = load(p)
+with open('stats.pickle', 'wb') as p:
+    dump(drugs_in_reactions, p)
 
     # with db_session:
     #     for x in drugs_in_reactions:
