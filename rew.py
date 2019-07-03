@@ -12,35 +12,78 @@ from CGRdbData import ReactionConditions, MoleculeProperties
 from logging import warning, basicConfig, ERROR
 from itertools import islice, chain
 from time import sleep
+from networkx import DiGraph
 
 load_schema('all_patents')
 
+pairs = []
+for z_mol in all:
+    mol_db = Molecule.find_structure(z_mol)
+    if mol_db:
+        print('create graph')
+        seen = {mol_db}
+        stages = 10
+        stack = [(mol_db, stages)]
+        added_reactions = set()
+        while stack:
+            mt, st = stack.pop(0)
+            reactions = mt.reactions_entities(pagesize=10000, product=False)
+            if not reactions and mt != mol_db:
+                pairs.append((z_mol, mt.structure))
+            st -= 1
+            for r in reactions:
+                if r.id in added_reactions:
+                    continue
+                added_reactions.add(r.id)
+                for m in r.molecules:
+                    obj_mol = m.molecule
+                    structure = obj_mol.structure
+                    if m.is_product:
+                        if st:
+                            if obj_mol not in seen:
+                                seen.add(obj_mol)
+                                stack.append((obj_mol, st))
+                        else:
+                            pairs.append((z_mol, structure))
+        print('done')
 
-def chunks(iterable, size=10):
-    iterator = iter(iterable)
-    for first in iterator:
-        yield chain([first], islice(iterator, size - 1))
+# n = 0
+# for x in range(0, 1873):
+#     with SDFread(f'zinc/{x}.sdf') as f:
+#         with db_session:
+#             for m in f:
+#                 m.aromatize()
+#                 m.standardize()
+#                 m.implicify_hydrogens()
+#                 m_db = Molecule.find_structure(m)
+#                 if m_db:
+#                     if not n % 1000:
+#                         print(n, 'done')
+#                     n += 1
+#                     try:
+#                         MoleculeProperties(user=User[1], structure=m_db, data={'zinc': 1})
+#                     except:
+#                         pass
 
-
-with open('zinc.pickle', 'rb') as f:
-    zinc = pickle.load(f)
-    n = 0
-    with db_session:
-        for chunk in chunks(range(0, 1600000), size=1000):
-            with db_session:
-                for x in chunk:
-                    try:
-                        m = Molecule[x]
-                        if bytes(m.structure) in zinc:
-                            if not n % 1000:
-                                print(n, 'done')
-                            try:
-                                MoleculeProperties(user=User[1], structure=m, data={'zinc': 1})
-                            except:
-                                pass
-                            n += 1
-                    except:
-                        pass
+# with open('zinc.pickle', 'rb') as f:
+#     zinc = pickle.load(f)
+#     n = 0
+#     with db_session:
+#         for chunk in chunks(range(0, 1600000), size=1000):
+#             with db_session:
+#                 for x in chunk:
+#                     try:
+#                         m = Molecule[x]
+#                         if bytes(m.structure) in zinc:
+#                             if not n % 1000:
+#                                 print(n, 'done')
+#                             try:
+#                                 MoleculeProperties(user=User[1], structure=m, data={'zinc': 1})
+#                             except:
+#                                 pass
+#                             n += 1
+#                     except:
+#                         pass
 
     # n = 0
     # for signat in mols:
