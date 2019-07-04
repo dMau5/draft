@@ -67,8 +67,8 @@ def trees(m):
 
 
 triples = []
-with SDFread('') as f:
-    all_mls = f.read()
+with open('sigmaaldrich.pickle', 'rb') as f:
+    all_mls = list(f)
     for z_mol in all_mls:
         tshki = []
         mol_db = Molecule.find_structure(z_mol)
@@ -106,27 +106,7 @@ with SDFread('') as f:
                 elif 0 < ind_tan <= .1:
                     trees(m)
 
-# n = 0
-# for x in range(47):
-#     with SDFread(f'zinc/{x}.sdf') as f:
-#         with db_session:
-#             for m in f:
-#                 try:
-#                     m.aromatize()
-#                 except Exception as e:
-#                     print(e)
-#                     print(m)
-#                 m.standardize()
-#                 m.implicify_hydrogens()
-#                 m_db = Molecule.find_structure(m)
-#                 if m_db:
-#                     if not n % 1000:
-#                         print(n, 'done')
-#                     n += 1
-#                     try:
-#                         MoleculeProperties(user=User[1], structure=m_db, data={'zinc': 1})
-#                     except:
-#                         pass
+
 
 # with open('zinc.pickle', 'rb') as f:
 #     zinc = pickle.load(f)
