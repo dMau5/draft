@@ -11,10 +11,11 @@ from CGRdb.database import MoleculeStructure
 from CGRdbData import ReactionConditions, MoleculeProperties
 from logging import warning, basicConfig, ERROR
 from itertools import islice, chain
+from CGRdb.search.fingerprints import FingerprintMolecule
 from time import sleep
 from networkx import DiGraph
 
-load_schema('bb')
+load_schema('all_patents', )
 
 
 def chunks(iterable, size=10):
@@ -23,66 +24,109 @@ def chunks(iterable, size=10):
         yield chain([first], islice(iterator, size - 1))
 
 
-# with db_session:
-#     all = set()
-#     for molecule in Molecule.select():
-#         m = molecule.structure
-#         m.standardize()
-#         m.implicify_hydrogens()
-#         all.add(m)
-# print(len(all))
-# with open('building_blocks.pickle', 'wb') as w:
-#     pickle.dump(all, w)
-#
-# pairs = []
-# for z_mol in all:
-#     mol_db = Molecule.find_structure(z_mol)
-#     if mol_db:
-#         print('create graph')
-#         seen = {mol_db}
-#         stages = 10
-#         stack = [(mol_db, stages)]
-#         added_reactions = set()
-#         while stack:
-#             mt, st = stack.pop(0)
-#             reactions = mt.reactions_entities(pagesize=10000, product=False)
-#             st -= 1
-#             for r in reactions:
-#                 if r.id in added_reactions:
-#                     continue
-#                 added_reactions.add(r.id)
-#                 for m in r.molecules:
-#                     obj_mol = m.molecule
-#                     structure = obj_mol.structure
-#                     if m.is_product:
-#                         pairs.append((z_mol, structure))
-#                         if st:
-#                             if obj_mol not in seen:
-#                                 seen.add(obj_mol)
-#                                 stack.append((obj_mol, st))
-#         print('done')
+def evaluation(query, res):
+    """
+    оценка нод.
+    возвращает танимото для пары запрос-результат.
+    """
+    query_fp, res_fp = (FingerprintMolecule.get_fingerprint(x) for x in [query, res])
+    qc, rc, common = len(query_fp), len(res_fp), len(query_fp.intersection(res_fp))
+    return common / (qc + rc - common)
 
-n = 0
-for x in range(47):
-    with SDFread(f'zinc/{x}.sdf') as f:
-        with db_session:
-            for m in f:
-                try:
-                    m.aromatize()
-                except Exception as e:
-                    print(e)
-                    print(m)
-                m.standardize()
-                m.implicify_hydrogens()
-                m_db = Molecule.find_structure(m)
-                if m_db:
-                    if not n % 1000:
-                        print(n, 'done')
-                    n += 1
-                    try:
-                        MoleculeProperties(user=User[1], structure=m_db, data={'zinc': 1})
-                    except:
-                        pass
+
+def trees(m):
+    m_db = Molecule.find_structure(m)
+    if m_db:
+        seen = {m_db}
+        stack = [(m_db, stages)]
+        added_reactions = set()
+        while stack:
+            mt, st = stack.pop(0)
+            reactions = mt.reactions_entities(pagesize=10000, product=False)
+            st -= 1
+            for r in reactions:
+                if r.id in added_reactions:
+                    continue
+                added_reactions.add(r.id)
+                for mm in r.molecules:
+                    obj_mol = mm.molecule
+                    structure = obj_mol.structure
+                    if mm.is_product:
+                        ind = 0
+                        if structure in tshki:
+                            for x in tshki:
+                                ind2 = evaluation(structure, x)
+                                if ind2 > ind:
+                                    ind = ind2
+                                    structure = x
+                        triples.append((m, structure, ind_tan / 2))
+                        if st:
+                            if obj_mol not in seen:
+                                seen.add(obj_mol)
+                                stack.append((obj_mol, st))
+
+
+triples = []
+with SDFread('') as f:
+    all_mls = f.read()
+    for z_mol in all_mls:
+        tshki = []
+        mol_db = Molecule.find_structure(z_mol)
+        if mol_db:
+            print('create graph')
+            seen = {mol_db}
+            stages = 10
+            stack = [(mol_db, stages)]
+            added_reactions = set()
+            while stack:
+                mt, st = stack.pop(0)
+                reactions = mt.reactions_entities(pagesize=10000, product=False)
+                st -= 1
+                for r in reactions:
+                    if r.id in added_reactions:
+                        continue
+                    added_reactions.add(r.id)
+                    for m in r.molecules:
+                        obj_mol = m.molecule
+                        structure = obj_mol.structure
+                        if m.is_product:
+                            tshki.append(structure)
+                            triples.append((z_mol, structure, 1))
+                            if st:
+                                if obj_mol not in seen:
+                                    seen.add(obj_mol)
+                                    stack.append((obj_mol, st))
+            print('done')
+            for m in all_mls[all_mls.index(z_mol)+1:]:
+                ind_tan = evaluation(z_mol, m)
+                if .9 <= ind_tan <= 1:
+                    trees(m)
+                elif .4 <= ind_tan <= .5:
+                    trees(m)
+                elif 0 < ind_tan <= .1:
+                    trees(m)
+
+# n = 0
+# for x in range(47):
+#     with SDFread(f'zinc/{x}.sdf') as f:
+#         with db_session:
+#             for m in f:
+#                 try:
+#                     m.aromatize()
+#                 except Exception as e:
+#                     print(e)
+#                     print(m)
+#                 m.standardize()
+#                 m.implicify_hydrogens()
+#                 m_db = Molecule.find_structure(m)
+#                 if m_db:
+#                     if not n % 1000:
+#                         print(n, 'done')
+#                     n += 1
+#                     try:
+#                         MoleculeProperties(user=User[1], structure=m_db, data={'zinc': 1})
+#                     except:
+#                         pass
 
 # with open('zinc.pickle', 'rb') as f:
 #     zinc = pickle.load(f)
