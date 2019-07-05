@@ -14,6 +14,7 @@ from itertools import islice, chain
 from CGRdb.search.fingerprints import FingerprintMolecule
 from time import sleep
 from networkx import DiGraph
+from collections import defaultdict
 
 load_schema('all_patents', )
 
@@ -35,42 +36,47 @@ def evaluation(query, res):
 
 
 def trees(m):
+    new_tshki = set()
     m_db = Molecule.find_structure(m)
     if m_db:
-        seen = {m_db}
-        stack = [(m_db, stages)]
-        added_reactions = set()
-        while stack:
-            mt, st = stack.pop(0)
+        new_seen = {m_db}
+        new_stack = [(m_db, stages)]
+        new_added_reactions = set()
+        while new_stack:
+            mt, st = new_stack.pop(0)
             reactions = mt.reactions_entities(pagesize=10000, product=False)
             st -= 1
             for r in reactions:
-                if r.id in added_reactions:
+                if r.id in new_added_reactions:
                     continue
-                added_reactions.add(r.id)
+                new_added_reactions.add(r.id)
                 for mm in r.molecules:
                     obj_mol = mm.molecule
                     structure = obj_mol.structure
                     if mm.is_product:
-                        ind = 0
-                        if structure in tshki:
-                            for x in tshki:
-                                ind2 = evaluation(structure, x)
-                                if ind2 > ind:
-                                    ind = ind2
-                                    structure = x
-                        triples.append((m, structure, ind_tan / 2))
+                        if structure not in tshki:
+                            new_tshki.add(structure)
                         if st:
-                            if obj_mol not in seen:
-                                seen.add(obj_mol)
-                                stack.append((obj_mol, st))
+                            if obj_mol not in new_seen:
+                                new_seen.add(obj_mol)
+                                new_stack.append((obj_mol, st))
+        for t in tshki:
+            ind = 0
+            s = 0
+            for n_t in new_tshki:
+                new_ind = evaluation(t, n_t)
+                if new_ind > ind:
+                    ind = new_ind
+                    s = n_t
+            if s:
+               triples.add((m, s, ind / 2))
 
 
-triples = []
+triples = set()
 with open('sigmaaldrich.pickle', 'rb') as f:
     all_mls = list(f)
-    for z_mol in all_mls:
-        tshki = []
+    for i, z_mol in enumerate(all_mls):
+        tshki = set()
         mol_db = Molecule.find_structure(z_mol)
         if mol_db:
             print('create graph')
@@ -90,14 +96,14 @@ with open('sigmaaldrich.pickle', 'rb') as f:
                         obj_mol = m.molecule
                         structure = obj_mol.structure
                         if m.is_product:
-                            tshki.append(structure)
-                            triples.append((z_mol, structure, 1))
+                            tshki.add(structure)
+                            triples.add((z_mol, structure, 1))
                             if st:
                                 if obj_mol not in seen:
                                     seen.add(obj_mol)
                                     stack.append((obj_mol, st))
             print('done')
-            for m in all_mls[all_mls.index(z_mol)+1:]:
+            for m in all_mls[i+1:]:
                 ind_tan = evaluation(z_mol, m)
                 if .9 <= ind_tan <= 1:
                     trees(m)
@@ -105,7 +111,8 @@ with open('sigmaaldrich.pickle', 'rb') as f:
                     trees(m)
                 elif 0 < ind_tan <= .1:
                     trees(m)
-
+with open('all_triples.pickle', 'wb') as f:
+    pickle.dump(triples, f)
 
 
 # with open('zinc.pickle', 'rb') as f:
