@@ -16,7 +16,7 @@ from time import sleep
 from networkx import DiGraph
 from collections import defaultdict
 
-load_schema('all_patents', )
+load_schema('all_patents',)
 
 
 def chunks(iterable, size=10):
@@ -35,84 +35,100 @@ def evaluation(query, res):
     return common / (qc + rc - common)
 
 
-def trees(m):
-    new_tshki = set()
-    m_db = Molecule.find_structure(m)
-    if m_db:
-        new_seen = {m_db}
-        new_stack = [(m_db, stages)]
-        new_added_reactions = set()
-        while new_stack:
-            mt, st = new_stack.pop(0)
-            reactions = mt.reactions_entities(pagesize=10000, product=False)
-            st -= 1
-            for r in reactions:
-                if r.id in new_added_reactions:
-                    continue
-                new_added_reactions.add(r.id)
-                for mm in r.molecules:
-                    obj_mol = mm.molecule
-                    structure = obj_mol.structure
-                    if mm.is_product:
-                        if structure not in tshki:
-                            new_tshki.add(structure)
-                        if st:
-                            if obj_mol not in new_seen:
-                                new_seen.add(obj_mol)
-                                new_stack.append((obj_mol, st))
-        for t in tshki:
-            ind = 0
-            s = 0
-            for n_t in new_tshki:
-                new_ind = evaluation(t, n_t)
-                if new_ind > ind:
-                    ind = new_ind
-                    s = n_t
-            if s:
-               triples.add((m, s, ind / 2))
+# def trees(m):
+#     if m in pairs:
+#         new_tshki = pairs[m]
+#         new_tshki -= tshki
+#     else:
+#         new_tshki = set()
+#         m_db = Molecule.find_structure(m)
+#         if m_db:
+#             new_seen = {m_db}
+#             new_stack = [(m_db, stages)]
+#             new_added_reactions = set()
+#             print('create_new_graph')
+#             while new_stack:
+#                 mt, st = new_stack.pop(0)
+#                 reactions = mt.reactions_entities(pagesize=10000, product=False)
+#                 st -= 1
+#                 for r in reactions:
+#                     if r.id in new_added_reactions:
+#                         continue
+#                     new_added_reactions.add(r.id)
+#                     for mm in r.molecules:
+#                         obj_mol = mm.molecule
+#                         structure = obj_mol.structure
+#                         if mm.is_product:
+#                             pairs[m].add(structure)
+#                             if structure not in tshki:
+#                                 new_tshki.add(structure)
+#                             if st:
+#                                 if obj_mol not in new_seen:
+#                                     new_seen.add(obj_mol)
+#                                     new_stack.append((obj_mol, st))
+#             print('new_done')
+#         for t in tshki:
+#             ind = 0
+#             s = 0
+#             for n_t in new_tshki:
+#                 new_ind = evaluation(t, n_t)
+#                 if new_ind > ind:
+#                     ind = new_ind
+#                     s = n_t
+#             if s:
+#                triples.add((m, t, ind / 2))
 
 
-triples = set()
+pairs = defaultdict(set)
 with open('sigmaaldrich.pickle', 'rb') as f:
-    all_mls = list(f)
+    gh = pickle.load(f)
+    all_mls = list(gh)
     for i, z_mol in enumerate(all_mls):
-        tshki = set()
-        mol_db = Molecule.find_structure(z_mol)
-        if mol_db:
-            print('create graph')
-            seen = {mol_db}
-            stages = 10
-            stack = [(mol_db, stages)]
-            added_reactions = set()
-            while stack:
-                mt, st = stack.pop(0)
-                reactions = mt.reactions_entities(pagesize=10000, product=False)
-                st -= 1
-                for r in reactions:
-                    if r.id in added_reactions:
-                        continue
-                    added_reactions.add(r.id)
-                    for m in r.molecules:
-                        obj_mol = m.molecule
-                        structure = obj_mol.structure
-                        if m.is_product:
-                            tshki.add(structure)
-                            triples.add((z_mol, structure, 1))
-                            if st:
-                                if obj_mol not in seen:
-                                    seen.add(obj_mol)
-                                    stack.append((obj_mol, st))
-            print('done')
-            for m in all_mls[i+1:]:
-                ind_tan = evaluation(z_mol, m)
-                if .9 <= ind_tan <= 1:
-                    trees(m)
-                elif .4 <= ind_tan <= .5:
-                    trees(m)
-                elif 0 < ind_tan <= .1:
-                    trees(m)
-with open('all_triples.pickle', 'wb') as f:
-    pickle.dump(triples, f)
+        print(i, 'go')
+        # tshki = set()
+        with db_session:
+            print('search')
+            mol_db = Molecule.find_structure(z_mol)
+            if mol_db:
+                print('create graph')
+                seen = {mol_db}
+                stages = 10
+                stack = [(mol_db, stages)]
+                added_reactions = set()
+                while stack:
+                    mt, st = stack.pop(0)
+                    reactions = mt.reactions_entities(pagesize=10000, product=False)
+                    st -= 1
+                    for r in reactions:
+                        if r.id in added_reactions:
+                            continue
+                        added_reactions.add(r.id)
+                        for m in r.molecules:
+                            obj_mol = m.molecule
+                            structure = obj_mol.structure
+                            if m.is_product:
+                                # tshki.add(structure)
+                                # triples.add((z_mol, structure, 1))
+                                pairs[bytes(z_mol)].add(bytes(structure))
+                                if st:
+                                    if obj_mol not in seen:
+                                        seen.add(obj_mol)
+                                        stack.append((obj_mol, st))
+                print('done')
+        #         r = len(triples)
+        #         for m in all_mls[i+1:]:
+        #             ind_tan = evaluation(z_mol, m)
+        #             if .9 <= ind_tan <= 1:
+        #                 trees(m)
+        #             elif .4 <= ind_tan <= .5:
+        #                 trees(m)
+        #             elif 0 < ind_tan <= .1:
+        #                 trees(m)
+        # print(i, 'finish')
+        # if i == 0:
+        #     break
+with open('all_pairs.pickle', 'wb') as f:
+    pickle.dump(pairs, f)
 
 
 # with open('zinc.pickle', 'rb') as f:
