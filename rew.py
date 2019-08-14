@@ -20,8 +20,88 @@ from pony.orm import select
 from math import ceil
 from itertools import product
 
-load_schema('all_patents',)
+load_schema('all_patents', )
 
+
+with open('from_prod_to_react.pickle', 'rb') as er:
+    df = pickle.load(er)
+
+n = 0
+pairs = defaultdict(set)
+with open('sigmaldrich.pickle', 'rb') as f:
+    gh = pickle.load(f)
+    with RDFwrite('True_pairs_.rdf') as w:
+        for i, z_mol in enumerate(gh):
+            print('---', i, 'go ---')
+            with db_session:
+                print('--- search ---')
+                mol_db = Molecule.find_structure(z_mol)
+                stages = 10
+                if mol_db:
+                    if mol_db.id in df:
+                        n += 1
+                        print('--- powel ---')
+                        val = df[mol_db.id]
+                        stack = []
+                        seen = set()
+                        for prod in val:
+                            pairs[mol_db.id].add(prod)
+                            w.write(ReactionContainer(reactants=[mol_db.structure],
+                                                      products=[Molecule[prod].structure], meta={'fer': 1}))
+                            if prod not in seen:
+                                stack.append((prod, stages - 1))
+                            seen.add(prod)
+                        while stack:
+                            mt, st = stack.pop(0)
+                            st -= 1
+                            if mt in df:
+                                vall = df[mt]
+                                for pro in vall:
+                                    pairs[mol_db.id].add(pro)
+                                    w.write(ReactionContainer(reactants=[Molecule[mt].structure],
+                                                              products=[Molecule[pro].structure], meta={'fer': 1}))
+                                    if pro not in seen:
+                                        if st:
+                                            stack.append((pro, st))
+                                    seen.add(pro)
+                        print('--- next ---\n')
+        print('--- finish na ---')
+        print('--> usego', n)
+with open('pairs_from_reactant_to_product.pickle', 'wb') as bds:
+    pickle.dump(pairs, bds)
+
+
+def evaluation(query, res):
+    """
+    оценка нод.
+    возвращает танимото для пары запрос-результат.
+    """
+    query_fp, res_fp = (FingerprintMolecule.get_fingerprint(x) for x in [query, res])
+    qc, rc, common = len(query_fp), len(res_fp), len(query_fp.intersection(res_fp))
+    return common / (qc + rc - common)
+
+
+with RDFwrite('False_pairs_.rdf') as fw:
+    for i, mol_id in enumerate(pairs):
+        with db_session:
+            for next_mol_id in pairs[i + 1]:
+                molecule_1 = Molecule[mol_id].structure
+                molecule_2 = Molecule[next_mol_id].structure
+                ind_tan = evaluation(molecule_1, molecule_2)
+                if .9 <= ind_tan <= 1 or .4 <= ind_tan <= .5 or 0 < ind_tan <= .1:
+                    old, young = pairs[mol_id], pairs[next_mol_id]
+                    new_tshki = old.union(young) - old.intersection(young)
+                    ind_tan = ind_tan / 2
+                    for t in new_tshki:
+                        fw.write(ReactionContainer(reactants=[molecule_2],
+                                                   products=[Molecule[t].structure], meta={'fer': ind_tan}))
+
+# def chunks(iterable, size=10):
+#     iterator = iter(iterable)
+#     for first in iterator:
+#         yield chain([first], islice(iterator, size - 1))
+#
+#
 # reaction_id = 0
 # yse = list()
 # rs = dict()
@@ -49,70 +129,14 @@ load_schema('all_patents',)
 #         prodts = []
 #         [prodts.append(m[1]) if m[2] else reacts.append(m[1]) for m in v]
 #         yse.extend(list(product(reacts, prodts)))
-#     with open('right_pairs.pickle', 'wb') as rp:
-#         pickle.dump(yse, rp)
+# with open('right_pairs.pickle', 'rb') as rp:
+#     yse = pickle.load(rp)
 #
-#     print('defaultdict powel')
-#     dd = defaultdict(set)
-#     for pair in yse:
-#         dd[pair[1]].add(pair[0])
-#     with open('from_prod_to_react.pickle', 'wb') as er:
-#         pickle.dump(dd, er)
-
-with open('from_prod_to_react.pickle', 'rb') as er:
-    df = pickle.load(er)
-
-with open('sigmaldrich.pickle', 'rb') as f:
-    gh = pickle.load(f)
-    with RDFwrite('True_pairs_.rdf') as w:
-        for i, z_mol in enumerate(gh):
-            print('---', i, 'go ---')
-            with db_session:
-                print('--- search ---')
-                mol_db = Molecule.find_structure(z_mol)
-                stages = 10
-                if mol_db:
-                    if mol_db.id in df:
-                        print('--- powel ---')
-                        val = df[mol_db.id]
-                        stack = []
-                        seen = set()
-                        for rctnt in val:
-                            w.write(ReactionContainer(reactants=[Molecule[rctnt].structure],
-                                                      products=[mol_db.structure], meta={'fer': 1}))
-                            if rctnt not in seen:
-                                stack.append((rctnt, stages - 1))
-                            seen.add(rctnt)
-                        while stack:
-                            mt, st = stack.pop(0)
-                            st -= 1
-                            if mt in df:
-                                vall = df[mt]
-                                for tnt in vall:
-                                    w.write(ReactionContainer(reactants=[Molecule[tnt].structure],
-                                                              products=[Molecule[mt].structure], meta={'fer': 1}))
-                                    if tnt not in seen:
-                                        if st:
-                                            stack.append((tnt, st))
-                                    seen.add(tnt)
-                        print('--- next ---\n')
-        print('--- finish na ---')
-
-# def chunks(iterable, size=10):
-#     iterator = iter(iterable)
-#     for first in iterator:
-#         yield chain([first], islice(iterator, size - 1))
-#
-#
-# def evaluation(query, res):
-#     """
-#     оценка нод.
-#     возвращает танимото для пары запрос-результат.
-#     """
-#     query_fp, res_fp = (FingerprintMolecule.get_fingerprint(x) for x in [query, res])
-#     qc, rc, common = len(query_fp), len(res_fp), len(query_fp.intersection(res_fp))
-#     return common / (qc + rc - common)
-
+# dd = defaultdict(set)
+# for pair in yse:
+#     dd[pair[0]].add(pair[1])
+# with open('from_prod_to_react.pickle', 'wb') as er:
+#     pickle.dump(dd, er)
 
 # def trees(m):
 #     if m in pairs:
@@ -158,54 +182,54 @@ with open('sigmaldrich.pickle', 'rb') as f:
 #                triples.add((m, t, ind / 2))
 
 
-with open('sigmaldrich.pickle', 'rb') as f:
-    gh = pickle.load(f)
-    with RDFwrite('true_pairs_1.rdf') as w:
-        for i, z_mol in enumerate(gh[86:], 86):
-            print(i, 'go')
-            tshki = set()
-            with db_session:
-                print('search')
-                mol_db = Molecule.find_structure(z_mol)
-                if mol_db:
-                    print('create graph')
-                    seen = {mol_db}
-                    stages = 10
-                    stack = [(mol_db, stages)]
-                    added_reactions = set()
-                    while stack:
-                        mt, st = stack.pop(0)
-                        reactions = mt.reactions_entities(pagesize=10000, product=False)
-                        st -= 1
-                        for r in reactions:
-                            if r.id in added_reactions:
-                                continue
-                            added_reactions.add(r.id)
-                            for m in r.molecules:
-                                obj_mol = m.molecule
-                                structure = obj_mol.structure
-                                if m.is_product:
-                                    tshki.add(structure)
-                                    triples.add((z_mol, structure, 1))
-                                    w.write(ReactionContainer(reactants=[z_mol], products=[structure], meta={'fer': 1,
-                                                                                                        'id': r.id}))
-                                    if st:
-                                        if obj_mol not in seen:
-                                            seen.add(obj_mol)
-                                            stack.append((obj_mol, st))
-                    print('done')
-                r = len(triples)
-                for m in all_mls[i+1:]:
-                    ind_tan = evaluation(z_mol, m)
-                    if .9 <= ind_tan <= 1:
-                        trees(m)
-                    elif .4 <= ind_tan <= .5:
-                        trees(m)
-                    elif 0 < ind_tan <= .1:
-                        trees(m)
-        print(i, 'finish')
-        if i == 0:
-            break
+# with open('sigmaldrich.pickle', 'rb') as f:
+#     gh = pickle.load(f)
+#     with RDFwrite('true_pairs_1.rdf') as w:
+#         for i, z_mol in enumerate(gh[86:], 86):
+#             print(i, 'go')
+#             tshki = set()
+#             with db_session:
+#                 print('search')
+#                 mol_db = Molecule.find_structure(z_mol)
+#                 if mol_db:
+#                     print('create graph')
+#                     seen = {mol_db}
+#                     stages = 10
+#                     stack = [(mol_db, stages)]
+#                     added_reactions = set()
+#                     while stack:
+#                         mt, st = stack.pop(0)
+#                         reactions = mt.reactions_entities(pagesize=10000, product=False)
+#                         st -= 1
+#                         for r in reactions:
+#                             if r.id in added_reactions:
+#                                 continue
+#                             added_reactions.add(r.id)
+#                             for m in r.molecules:
+#                                 obj_mol = m.molecule
+#                                 structure = obj_mol.structure
+#                                 if m.is_product:
+#                                     tshki.add(structure)
+#                                     triples.add((z_mol, structure, 1))
+#                                     w.write(ReactionContainer(reactants=[z_mol], products=[structure], meta={'fer': 1,
+#                                                                                                         'id': r.id}))
+#                                     if st:
+#                                         if obj_mol not in seen:
+#                                             seen.add(obj_mol)
+#                                             stack.append((obj_mol, st))
+#                     print('done')
+#                 r = len(triples)
+#                 for m in all_mols[i+1:]:
+#                     ind_tan = evaluation(z_mol, m)
+#                     if .9 <= ind_tan <= 1:
+#                         trees(m)
+#                     elif .4 <= ind_tan <= .5:
+#                         trees(m)
+#                     elif 0 < ind_tan <= .1:
+#                         trees(m)
+#         print(i, 'finish')
+#         if i == 0:
+#             break
 
 
 # with open('zinc.pickle', 'rb') as f:
