@@ -4,6 +4,7 @@ from CGRdb.search.fingerprints import FingerprintMolecule
 from CGRtools.files import RDFwrite
 from CGRtools.containers import ReactionContainer
 import numpy as np
+from math import ceil
 from pony.orm import select, db_session
 from pickle import dump, load
 from random import choices
@@ -16,8 +17,8 @@ def evaluation(query, res):
     оценка нод.
     возвращает танимото для пары запрос-результат.
     """
-    query_fp, res_fp = (FingerprintMolecule.get_fingerprint(x) for x in [query, res])
-    qc, rc, common = len(query_fp), len(res_fp), len(query_fp.intersection(res_fp))
+    # query_fp, res_fp = (FingerprintMolecule.get_fingerprint(x) for x in [query, res])
+    qc, rc, common = len(query), len(res), len(query.intersection(res))
     return common / (qc + rc - common)
 
 
@@ -52,24 +53,24 @@ with open('array_of_similarity_A.pickle', 'rb') as f2:
     big = load(f2)
 
 
-def writer(t1, t2, tto):
+def writer(t1, t2, num):
     unic_tshki_1 = t1 - t2
-    print(len(unic_tshki_1))
+    print('started mols', len(unic_tshki_1))
     unic_tshki_2 = t2 - t1
-    print(len(unic_tshki_2), '\n')
-    tshki = choices(list(unic_tshki_1), k=2)
-    for t_1 in tshki:
-        mol_t_1 = Molecule[t_1].structure
+    for t_1 in list(unic_tshki_1)[: num + 1]:
+        with open(f'database/{t_1}.pickle', 'rb') as p1:
+            fp_1 = load(p1)
         ind = 0
         for t_2 in unic_tshki_2:
-            mol_t_2 = Molecule[t_2].structure
-            new_ind = evaluation(mol_t_1, mol_t_2)
+            with open(f'database/{t_2}.pickle', 'rb') as p2:
+                fp_2 = load(p2)
+            new_ind = evaluation(fp_1, fp_2)
             if new_ind > ind:
                 ind = new_ind
                 tsh_2 = t_2
-        fw.write(ReactionContainer(reactants=[Molecule[mol_id_1].structure],
-                                   products=[Molecule[tsh_2].structure], meta={'fer': tto / 2}))
-        print('written')
+        if ind:
+            fw.write(ReactionContainer(reactants=[Molecule[mol_id_1].structure],
+                                       products=[Molecule[tsh_2].structure], meta={'fer': ind / 2}))
 
 
 with RDFwrite('False_pairs_.rdf') as fw:
@@ -96,10 +97,27 @@ with RDFwrite('False_pairs_.rdf') as fw:
                         low = ind_tan
 
             tshki_1 = pairs[mol_id_1]
+            total = len(tshki_1)
+            try:
+                tshki_2_h = pairs[high_mol_id]
+                tshki_2_m = pairs[middle_mol_id]
+                tshki_2_l = pairs[low_mol_id]
+                hi = len(tshki_2_h)
+                mi = len(tshki_2_m)
+                lo = len(tshki_2_l)
+                to = hi + mi + lo
+                hi = hi / to
+                mi = mi / to
+                lo = lo / to
+            except Exception as e:
+                print(e)
             if high_mol_id:
-                writer(tshki_1, pairs[high_mol_id], high)
+                print('high', 100 * hi)
+                writer(tshki_1, tshki_2_h, ceil(total * hi))
             if middle_mol_id:
-                writer(tshki_1, pairs[middle_mol_id], middle)
+                print('middle', 100* mi)
+                writer(tshki_1, tshki_2_m, ceil(total * mi))
             if low_mol_id:
-                writer(tshki_1, pairs[low_mol_id], low)
+                print('low', lo*100)
+                writer(tshki_1, tshki_2_l, ceil(total * lo))
             print(f'-- finish {i} --')
