@@ -7,7 +7,6 @@ import numpy as np
 from math import ceil
 from pony.orm import select, db_session
 from pickle import dump, load
-from random import choices
 
 load_schema('all_patents', )
 
@@ -26,8 +25,6 @@ with open('pairs_from_reactant_to_product.pickle', 'rb') as f:
     pairs = load(f)
 
 
-sigma = list(pairs.keys())
-print(len(sigma))
 # big = np.eye(len(sigma), dtype=np.uint8)
 # old_to_new = {sigma[0]: 0}
 # n = 0
@@ -51,12 +48,16 @@ with open('old_to_new_ids.pickle', 'rb') as f1:
     old_to_new = load(f1)
 with open('array_of_similarity_A.pickle', 'rb') as f2:
     big = load(f2)
+with open('list_of_A.pickle', 'rb') as we:
+    sigma = load(we)
+    print(len(sigma))
 
 
 def writer(t1, t2, num):
     unic_tshki_1 = t1 - t2
-    print('started mols', len(unic_tshki_1))
+    print('started mols', len(unic_tshki_1), 'to', num)
     unic_tshki_2 = t2 - t1
+    print('u_tshki_2--->', len(unic_tshki_2))
     for t_1 in list(unic_tshki_1)[: num + 1]:
         with open(f'database/{t_1}.pickle', 'rb') as p1:
             fp_1 = load(p1)
@@ -71,6 +72,12 @@ def writer(t1, t2, num):
         if ind:
             fw.write(ReactionContainer(reactants=[Molecule[mol_id_1].structure],
                                        products=[Molecule[tsh_2].structure], meta={'fer': ind / 2}))
+
+        upd = 0
+        diff = len(unic_tshki_1) - num
+        if diff < 0:
+            upd = - diff
+        return upd
 
 
 with RDFwrite('False_pairs_.rdf') as fw:
@@ -111,13 +118,20 @@ with RDFwrite('False_pairs_.rdf') as fw:
                 lo = lo / to
             except Exception as e:
                 print(e)
+            balance = 0
             if high_mol_id:
                 print('high', 100 * hi)
-                writer(tshki_1, tshki_2_h, ceil(total * hi))
+                balance = writer(tshki_1, tshki_2_h, ceil(total * hi))
             if middle_mol_id:
-                print('middle', 100* mi)
-                writer(tshki_1, tshki_2_m, ceil(total * mi))
+                print('middle', 100 * mi)
+                if balance:
+                    balance = writer(tshki_1, tshki_2_m, ceil(total * mi) + balance)
+                else:
+                    balance = writer(tshki_1, tshki_2_m, ceil(total * mi))
             if low_mol_id:
-                print('low', lo*100)
-                writer(tshki_1, tshki_2_l, ceil(total * lo))
+                print('low', lo * 100)
+                if balance:
+                    writer(tshki_1, tshki_2_l, ceil(total * lo) + balance)
+                else:
+                    writer(tshki_1, tshki_2_l, ceil(total * lo))
             print(f'-- finish {i} --')
