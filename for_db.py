@@ -100,15 +100,12 @@ def roundrobin1(*iterables):
 def roundrobin2(iterables):
     dt = []
     for tu_sh, tu in iterables:
-        print(tu_sh, tu)
         try:
-            tu_sh = next(tu_sh)
             dt.append((tu_sh, tu))
-            # print(tu_sh, tu)
-            yield tu_sh, tu
+            yield next(tu_sh), tu
         except StopIteration:
             pass
-    exit()
+
     num_active = len(dt)
     iterables = cycle(dt)
     while num_active:
@@ -117,8 +114,7 @@ def roundrobin2(iterables):
                 yield next(tu_sh), tu
         except StopIteration:
             num_active -= 1
-            dt.pop(0)
-            iterables = cycle(dt)
+            iterables = cycle(islice(iterables, num_active))
 
 
 def unique_everseen(iterable, key=None):
@@ -147,6 +143,7 @@ with RDFwrite('False_pairs_.rdf') as fw:
             tshki_1 = pairs[mol_id_1]
             total = len(tshki_1)
             print('total', total)
+            ini = time()
             t_sh01 = ((iter(pairs[new_dict[n]] - tshki_1), tshki_1 - pairs[new_dict[n]])
                       for n, x in enumerate(big[new_id]) if x <= 25.5 and new_id != n)
             t_sh45 = ((iter(pairs[new_dict[n]] - tshki_1), tshki_1 - pairs[new_dict[n]])
@@ -162,7 +159,8 @@ with RDFwrite('False_pairs_.rdf') as fw:
             # print('uee', time())
             # exit()
             n = 0
-            for ts, t in unique_everseen(roundrobin2(roundrobin1(t_sh01, t_sh45, t_sh90)), lambda x: x[0]):
+            for ts, t in islice(unique_everseen(roundrobin2(roundrobin1(t_sh01, t_sh45, t_sh90)), lambda x: x[0]),
+                                total):
                 n += 1
                 with open(f'database/{ts}.pickle', 'rb') as p1:
                     fp_1 = load(p1)
@@ -176,6 +174,7 @@ with RDFwrite('False_pairs_.rdf') as fw:
                 if ind:
                     fw.write(ReactionContainer(reactants=[Molecule[mol_id_1].structure],
                                                products=[Molecule[ts].structure], meta={'fer': ind / 2}))
+            print('prowlo', time() - ini, 'sec')
             print('usego', n)
 
             # try:
