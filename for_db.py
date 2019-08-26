@@ -98,7 +98,17 @@ def roundrobin1(*iterables):
 
 
 def roundrobin2(iterables):
-    dt = [x for x in iterables if x]
+    dt = []
+    for tu_sh, tu in iterables:
+        print(tu_sh, tu)
+        try:
+            tu_sh = next(tu_sh)
+            dt.append((tu_sh, tu))
+            # print(tu_sh, tu)
+            yield tu_sh, tu
+        except StopIteration:
+            pass
+    exit()
     num_active = len(dt)
     iterables = cycle(dt)
     while num_active:
