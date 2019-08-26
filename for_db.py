@@ -11,7 +11,7 @@ from itertools import islice, cycle, filterfalse
 from random import randint
 from time import time
 
-load_schema('all_patents',)
+load_schema('all_patents', )
 
 
 def evaluation(query, res):
@@ -97,19 +97,21 @@ def roundrobin1(*iterables):
             iterables = cycle(islice(iterables, num_active))
 
 
-def roundrobin2(*iterables):
-    num_active = len(iterables)
-    iterables = cycle(iterables)
+def roundrobin2(iterables):
+    dt = [x for x in iterables if x]
+    num_active = len(dt)
+    iterables = cycle(dt)
     while num_active:
         try:
             for tu_sh, tu in iterables:
                 yield next(tu_sh), tu
         except StopIteration:
             num_active -= 1
-            iterables = cycle(islice(iterables, num_active))
+            dt.pop(0)
+            iterables = cycle(dt)
 
 
-def unique_everseen(iterable, stop, key=None):
+def unique_everseen(iterable, key=None):
     "List unique elements, preserving order. Remember all elements ever seen."
     # unique_everseen('AAAABBBCCDAABBB') --> A B C D
     # unique_everseen('ABBCcAD', str.lower) --> A B C D
@@ -124,9 +126,7 @@ def unique_everseen(iterable, stop, key=None):
             k = key(element)
             if k not in seen:
                 seen_add(k)
-                if stop:
-                    stop -= 1
-                    yield element
+                yield element
 
 
 with RDFwrite('False_pairs_.rdf') as fw:
@@ -146,13 +146,13 @@ with RDFwrite('False_pairs_.rdf') as fw:
             # print('ini', time())
             # rr1 = roundrobin1(t_sh01, t_sh45, t_sh90)
             # print('rr1', time())
-            # rr2 = roundrobin2(*rr1)
+            # rr2 = roundrobin2(rr1)
             # print('rr2', time())
             # uee = unique_everseen(rr2, lambda x: x[0])
             # print('uee', time())
             # exit()
             n = 0
-            for ts, t in unique_everseen(roundrobin2(*roundrobin1(t_sh01, t_sh45, t_sh90)), total, lambda x: x[0]):
+            for ts, t in unique_everseen(roundrobin2(roundrobin1(t_sh01, t_sh45, t_sh90)), lambda x: x[0]):
                 n += 1
                 with open(f'database/{ts}.pickle', 'rb') as p1:
                     fp_1 = load(p1)
