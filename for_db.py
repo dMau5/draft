@@ -12,7 +12,7 @@ from itertools import islice, cycle, filterfalse
 from random import randint
 from time import time
 
-load_schema('all_patents',)
+load_schema('all_patents', )
 
 
 def evaluation(query, res):
@@ -136,8 +136,9 @@ def unique_everseen(iterable, key=None):
                 yield element
 
 
-def worker(p):
-    tsh, tu = p.get()
+def worker(p, o):
+    idd, t = p.get()
+    tsh, tu = t
     with open(f'database/{tsh}.pickle', 'rb') as p1:
         fp_1 = load(p1)
     index = 0
@@ -148,7 +149,9 @@ def worker(p):
         if new_ind > index:
             index = new_ind
     if index:
-        out.put((tsh, index))
+        with db_session:
+            o.put(ReactionContainer(reactants=[Molecule[idd].structure],
+                                    products=[Molecule[tsh].structure], meta={'fer': index / 2}))
 
 
 if __name__ == '__main__':
@@ -156,41 +159,39 @@ if __name__ == '__main__':
         inp = Queue()
         out = Queue()
         for _ in range(20):
-            Process(target=worker, args=(inp, )).start()
+            Process(target=worker, args=(inp, out)).start()
 
         for i, mol_id_1 in enumerate(sigma):
             print(f'-- {i} powel --')
             # if i == 3:
             #     exit()
             new_id = old_to_new[mol_id_1]
-            with db_session:
-                tshki_1 = pairs[mol_id_1]
-                total = len(tshki_1)
-                print('total', total)
-                ini = time()
-                t_sh01 = ((iter(pairs[new_dict[n]] - tshki_1), tshki_1 - pairs[new_dict[n]])
-                          for n, x in enumerate(big[new_id]) if x <= 25.5 and new_id != n)
-                t_sh45 = ((iter(pairs[new_dict[n]] - tshki_1), tshki_1 - pairs[new_dict[n]])
-                          for n, x in enumerate(big[new_id]) if 102 <= x <= 127.5 and new_id != n)
-                t_sh90 = ((iter(pairs[new_dict[n]] - tshki_1), tshki_1 - pairs[new_dict[n]])
-                          for n, x in enumerate(big[new_id]) if x >= 229.5 and new_id != n)
-                # print('ini', time())
-                # rr1 = roundrobin1(t_sh01, t_sh45, t_sh90)
-                # print('rr1', time())
-                # rr2 = roundrobin2(rr1)
-                # print('rr2', time())
-                # uee = unique_everseen(rr2, lambda x: x[0])
-                # print('uee', time())
-                # exit()
-                n = 0
-                for pair in islice(unique_everseen(roundrobin2(roundrobin1(t_sh01, t_sh45, t_sh90)), lambda x: x[0]),
-                                   total):
-                    inp.put(pair)
-                for _ in range(total):
-                    ts, ind = out.get()
-                    fw.write(ReactionContainer(reactants=[Molecule[mol_id_1].structure],
-                                               products=[Molecule[ts].structure], meta={'fer': ind / 2}))
-                print('prowlo', time() - ini, 'sec')
+
+            tshki_1 = pairs[mol_id_1]
+            total = len(tshki_1)
+            print('total', total)
+            ini = time()
+            t_sh01 = ((iter(pairs[new_dict[n]] - tshki_1), tshki_1 - pairs[new_dict[n]])
+                      for n, x in enumerate(big[new_id]) if x <= 25.5 and new_id != n)
+            t_sh45 = ((iter(pairs[new_dict[n]] - tshki_1), tshki_1 - pairs[new_dict[n]])
+                      for n, x in enumerate(big[new_id]) if 102 <= x <= 127.5 and new_id != n)
+            t_sh90 = ((iter(pairs[new_dict[n]] - tshki_1), tshki_1 - pairs[new_dict[n]])
+                      for n, x in enumerate(big[new_id]) if x >= 229.5 and new_id != n)
+            # print('ini', time())
+            # rr1 = roundrobin1(t_sh01, t_sh45, t_sh90)
+            # print('rr1', time())
+            # rr2 = roundrobin2(rr1)
+            # print('rr2', time())
+            # uee = unique_everseen(rr2, lambda x: x[0])
+            # print('uee', time())
+            # exit()
+            n = 0
+            for pair in islice(unique_everseen(roundrobin2(roundrobin1(t_sh01, t_sh45, t_sh90)), lambda x: x[0]),
+                               total):
+                inp.put((mol_id_1, pair))
+            for _ in range(total):
+                fw.write(out.get())
+            print('prowlo', time() - ini, 'sec')
 
             # try:
             #     tshki_2_h = pairs[high_mol_id]
