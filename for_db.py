@@ -12,8 +12,6 @@ from itertools import islice, cycle, filterfalse
 from random import randint
 from time import time
 
-# load_schema('all_patents', user='postgres', password='jyvt0n3', host='localhost', database='postgres')
-
 
 def evaluation(query, res):
     """
