@@ -12,7 +12,7 @@ from itertools import islice, cycle, filterfalse
 from random import randint
 from time import time
 
-load_schema('all_patents', )
+# load_schema('all_patents', user='postgres', password='jyvt0n3', host='localhost', database='postgres')
 
 
 def evaluation(query, res):
@@ -48,13 +48,18 @@ with open('pairs_from_reactant_to_product.pickle', 'rb') as f:
 #         new_id_2 = old_to_new[id_2]
 #         big[i][new_id_2] = big[new_id_2][i] = ind * 255
 
+with open('fingerprints.pickle', 'rb') as f0:
+    fps = load(f0)
+
 with open('old_to_new_ids.pickle', 'rb') as f1:
     old_to_new = load(f1)
+
 with open('array_of_similarity_A.pickle', 'rb') as f2:
     big = load(f2)
+
 with open('list_of_A.pickle', 'rb') as we:
     sigma = load(we)
-    print(len(sigma))
+
 with open('naoborot.pickle', 'rb') as f3:
     new_dict = load(f3)
 
@@ -137,31 +142,37 @@ def unique_everseen(iterable, key=None):
 
 
 def worker(p, o):
-    idd, t = p.get()
-    tsh, tu = t
-    with open(f'database/{tsh}.pickle', 'rb') as p1:
-        fp_1 = load(p1)
-    index = 0
-    for ii in tu:
-        with open(f'database/{ii}.pickle', 'rb') as p2:
-            fp_2 = load(p2)
-        new_ind = evaluation(fp_1, fp_2)
-        if new_ind > index:
-            index = new_ind
-    if index:
-        with db_session:
-            o.put(ReactionContainer(reactants=[Molecule[idd].structure],
-                                    products=[Molecule[tsh].structure], meta={'fer': index / 2}))
+    for m_A, t in iter(p.get, 'STOP'):
+        tsh, tu = t
+        fp_1 = fps[tsh]
+        # fp_1, molecule_1 = m_1['fp'], m_1['molecule']
+        index = 0
+        for ii in tu:
+            # with open(f'database/{ii}.pickle', 'rb') as p2:
+            #     fp_2 = load(p2)
+            #     fp_2 = m_2['fp']
+            fp_2 = fps[ii]
+            new_ind = evaluation(fp_1, fp_2)
+            if new_ind > index:
+                index = new_ind
+        # with db_session:
+        #     o.put(ReactionContainer(reactants=[m_A],
+        #                             products=[Molecule[tsh].structure], meta={'fer': index / 2}))
+        o.put((m_A, tsh, index))
 
 
 if __name__ == '__main__':
-    with RDFwrite('False_pairs.rdf') as fw:
+    with RDFwrite('False_pairs_.rdf') as fw:
+        respa = []
         inp = Queue()
         out = Queue()
         for _ in range(20):
-            Process(target=worker, args=(inp, out)).start()
+            Process(target=worker, args=(inp, out, )).start()
 
-        for i, mol_id_1 in enumerate(sigma):
+        for i, mol_id_1 in enumerate(sigma[676:], 676):
+            # with open(f'database_1/{mol_id_1}.pickle', 'rb') as pp:
+            #     m = load(pp)
+            #     molecule = m['molecule']
             print(f'-- {i} powel --')
             # if i == 3:
             #     exit()
@@ -185,14 +196,25 @@ if __name__ == '__main__':
             # uee = unique_everseen(rr2, lambda x: x[0])
             # print('uee', time())
             # exit()
-            n = 0
             for pair in islice(unique_everseen(roundrobin2(roundrobin1(t_sh01, t_sh45, t_sh90)), lambda x: x[0]),
                                total):
                 inp.put((mol_id_1, pair))
+            n = 168
+            rank = 1000
             for _ in range(total):
-                fw.write(out.get())
+                print(f'for {i} ||', 'inp', inp.qsize(), 'out', out.qsize())
+                respa.append(out.get())
+                rank -= 1
+                if not rank:
+                    with open(f'triples/{n}.pickle', 'wb') as wq:
+                        dump(respa, wq)
+                    respa = []
+                    n += 1
+                    rank = 1000
             print('prowlo', time() - ini, 'sec')
 
+        for _ in range(20):
+            inp.put('STOP')
             # try:
             #     tshki_2_h = pairs[high_mol_id]
             #     tshki_2_m = pairs[middle_mol_id]
