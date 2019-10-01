@@ -1,8 +1,7 @@
 import pickle
-from pony.orm import db_session
-from CGRtools.containers import ReactionContainer
+from pony.orm import db_session, select
+from CGRtools.containers import ReactionContainer, MoleculeContainer
 from CGRtools.files import SDFread, RDFread, SDFwrite, RDFwrite
-from CGRtools.containers import MoleculeContainer
 import networkx as nx
 from multiprocessing import Process, Queue
 from CGRdbUser import User
@@ -10,65 +9,42 @@ from CGRdb import load_schema, Molecule, Reaction
 from CGRdb.database import MoleculeStructure, MoleculeReaction
 from CGRdbData import ReactionConditions, MoleculeProperties
 from logging import warning, basicConfig, ERROR
-from itertools import islice, chain
+from itertools import islice, chain, cycle, product, filterfalse
 from CGRdb.search.fingerprints import FingerprintMolecule
-from time import sleep
-from networkx import DiGraph
+from time import sleep, time
 from collections import defaultdict
-from CGRtools.containers import ReactionContainer
-from pony.orm import select
 from math import ceil
-from itertools import product
+from random import shuffle
+from os import environ
+import numpy as np
 
-load_schema('all_patents', )
+# environ["PATH"] += ':/home/dinar/balls'
+load_schema('all_patents',)
 
 
-with open('from_prod_to_react.pickle', 'rb') as er:
-    df = pickle.load(er)
+def chunks(iterable, size=10):
+    iterator = iter(iterable)
+    for first in iterator:
+        yield chain([first], islice(iterator, size - 1))
 
-n = 0
-pairs = defaultdict(set)
-with open('sigmaldrich.pickle', 'rb') as f:
-    gh = pickle.load(f)
-    with RDFwrite('True_pairs_.rdf') as w:
-        for i, z_mol in enumerate(gh):
-            print('---', i, 'go ---')
-            with db_session:
-                print('--- search ---')
-                mol_db = Molecule.find_structure(z_mol)
-                stages = 10
-                if mol_db:
-                    if mol_db.id in df:
-                        n += 1
-                        print('--- powel ---')
-                        val = df[mol_db.id]
-                        stack = []
-                        seen = set()
-                        for prod in val:
-                            pairs[mol_db.id].add(prod)
-                            w.write(ReactionContainer(reactants=[mol_db.structure],
-                                                      products=[Molecule[prod].structure], meta={'fer': 1}))
-                            if prod not in seen:
-                                stack.append((prod, stages - 1))
-                            seen.add(prod)
-                        while stack:
-                            mt, st = stack.pop(0)
-                            st -= 1
-                            if mt in df:
-                                vall = df[mt]
-                                for pro in vall:
-                                    pairs[mol_db.id].add(pro)
-                                    w.write(ReactionContainer(reactants=[Molecule[mt].structure],
-                                                              products=[Molecule[pro].structure], meta={'fer': 1}))
-                                    if pro not in seen:
-                                        if st:
-                                            stack.append((pro, st))
-                                    seen.add(pro)
-                        print('--- next ---\n')
-        print('--- finish na ---')
-        print('--> usego', n)
-with open('pairs_from_reactant_to_product.pickle', 'wb') as bds:
-    pickle.dump(pairs, bds)
+
+with open('pairs_from_reactant_to_product.pickle', 'rb') as f:
+    pairs = pickle.load(f)
+
+with open('fingerprints.pickle', 'rb') as f1:
+    fps = pickle.load(f1)
+
+with open('list_of_A.pickle', 'rb') as f0:
+    sigma = pickle.load(f0)
+
+with open('similarities_array.pickle', 'rb') as f2:
+    big = pickle.load(f2)
+
+with open('old_to_new.pickle', 'rb') as f3:
+    old_to_new = pickle.load(f3)
+
+with open('new_to_old.pickle', 'rb') as f4:
+    new_to_old = pickle.load(f4)
 
 
 def evaluation(query, res):
@@ -76,32 +52,318 @@ def evaluation(query, res):
     оценка нод.
     возвращает танимото для пары запрос-результат.
     """
-    query_fp, res_fp = (FingerprintMolecule.get_fingerprint(x) for x in [query, res])
-    qc, rc, common = len(query_fp), len(res_fp), len(query_fp.intersection(res_fp))
+    # query_fp, res_fp = (FingerprintMolecule.get_fingerprint(x) for x in [query, res])
+    qc, rc, common = len(query), len(res), len(query.intersection(res))
     return common / (qc + rc - common)
 
 
-with RDFwrite('False_pairs_.rdf') as fw:
-    for i, mol_id in enumerate(pairs):
-        with db_session:
-            for next_mol_id in pairs[i + 1]:
-                molecule_1 = Molecule[mol_id].structure
-                molecule_2 = Molecule[next_mol_id].structure
-                ind_tan = evaluation(molecule_1, molecule_2)
-                if .9 <= ind_tan <= 1 or .4 <= ind_tan <= .5 or 0 < ind_tan <= .1:
-                    old, young = pairs[mol_id], pairs[next_mol_id]
-                    new_tshki = old.union(young) - old.intersection(young)
-                    ind_tan = ind_tan / 2
-                    for t in new_tshki:
-                        fw.write(ReactionContainer(reactants=[molecule_2],
-                                                   products=[Molecule[t].structure], meta={'fer': ind_tan}))
+def roundrobin1(*iterables):
+    num_active = len(iterables)
+    iterables = cycle(iterables)
+    while num_active:
+        try:
+            for nxt in iterables:
+                yield next(nxt)
+        except StopIteration:
+            num_active -= 1
+            iterables = cycle(islice(iterables, num_active))
 
-# def chunks(iterable, size=10):
-#     iterator = iter(iterable)
-#     for first in iterator:
-#         yield chain([first], islice(iterator, size - 1))
+
+def roundrobin2(iterables):
+    dt = []
+    for tu_sh, tu, A_sh in iterables:
+        try:
+            yield next(tu_sh), tu, A_sh
+            dt.append((tu_sh, tu, A_sh))
+        except StopIteration:
+            pass
+
+    num_active = len(dt)
+    iterables = cycle(dt)
+    while num_active:
+        try:
+            for tu_sh, tu, A_sh in iterables:
+                yield next(tu_sh), tu, A_sh
+        except StopIteration:
+            num_active -= 1
+            iterables = cycle(islice(iterables, num_active))
+
+
+def unique_everseen(iterable, key=None):
+    "List unique elements, preserving order. Remember all elements ever seen."
+    # unique_everseen('AAAABBBCCDAABBB') --> A B C D
+    # unique_everseen('ABBCcAD', str.lower) --> A B C D
+    seen = set()
+    seen_add = seen.add
+    if key is None:
+        for element in filterfalse(seen.__contains__, iterable):
+            seen_add(element)
+            yield element
+    else:
+        for element in iterable:
+            k = key(element)
+            if k not in seen:
+                seen_add(k)
+                yield element
+
+
+def worker(p, o):
+    for m_A, m_A_sh, t_u_sh in iter(p.get, 'STOP'):
+        fp_1 = fps[t_u_sh]
+        t_unics = set(pairs[m_A]) - set(pairs[m_A_sh])
+        index = 0
+        for t_u in t_unics:
+            fp_2 = fps[t_u]
+            new_ind = evaluation(fp_1, fp_2)
+            if new_ind > index:
+                index = new_ind
+        with db_session:
+            m_A = Molecule[m_A].structure
+            t_u_sh = Molecule[t_u_sh].structure
+        o.put((m_A, t_u_sh, False, index))
+
+
+if __name__ == '__main__':
+    with open('False_pairs.txt', 'w') as fw:
+        inp = Queue()
+        out = Queue()
+        for _ in range(20):
+            Process(target=worker, args=(inp, out, )).start()
+
+        n = 0
+        rank = 1000
+        data = []
+        # holost = 15700
+        for i, id_1 in enumerate(sigma):
+            print(f'-- {i} powel --')
+            new_id = old_to_new[id_1]
+
+            tshki_1 = set(pairs[id_1])
+            total = len(tshki_1)
+            print('total', total)
+            # ini = time()
+            t_sh01 = ((iter(set(pairs[new_to_old[n]]) - tshki_1), tshki_1 - set(pairs[new_to_old[n]]), new_to_old[n])
+                      for n, x in enumerate(big[new_id]) if x <= 25.5 and new_id != n)
+            t_sh45 = ((iter(set(pairs[new_to_old[n]]) - tshki_1), tshki_1 - set(pairs[new_to_old[n]]), new_to_old[n])
+                      for n, x in enumerate(big[new_id]) if 102 <= x <= 127.5 and new_id != n)
+            t_sh90 = ((iter(set(pairs[new_to_old[n]]) - tshki_1), tshki_1 - set(pairs[new_to_old[n]]), new_to_old[n])
+                      for n, x in enumerate(big[new_id]) if x >= 229.5 and new_id != n)
+
+            for triple in islice(unique_everseen(roundrobin2(roundrobin1(t_sh01, t_sh45, t_sh90)), lambda x: x[0]),
+                                 total):
+                t_unic_sh, t_unic, m_A_sh = triple
+                inp.put((id_1, m_A_sh, t_unic_sh))
+            for _ in range(total):
+                print(f'for {i} ||', 'inp-->', inp.qsize(), 'out-->', out.qsize(), 'rank-->', rank, 'file-->', n)
+                dt = out.get()
+                data.append(dt)
+                fw.write(f'{str(dt[0])}, {str(dt[1])}, False, {str(dt[3])}\n')
+                # holost -= 1
+                # if holost <= 0:
+                rank -= 1
+                if not rank:
+                    with open(f'False_pairs/{n}.pickle', 'wb') as wq:
+                        pickle.dump(data, wq)
+                    data = []
+                    n += 1
+                    rank = 1000
+            # print('prowlo', time() - ini, 'sec')
+
+        for _ in range(20):
+            inp.put('STOP')
+
+
+# all_mols = set(pairs)
+# for k, values in pairs.items():
+#     for y in values:
+#         all_mols.add(y)
+#
+# print('usego', len(all_mols))
+# fps = {}
+# n = 0
+# with db_session:
+#     for chunk in chunks(list(Molecule.select(lambda x: x.id in all_mols)), size=1000):
+#         n += 1
+#         for mol in chunk:
+#             fp = FingerprintMolecule.get_fingerprint(mol.structure)
+#             fps[mol.id] = fp
+#         print('done -->', n)
+
+# dict odnostadiynyh reactions: key == reactant from building blocks, value == products from patents reactions
+# with open('from_prod_to_react.pickle', 'rb') as er:
+#     df = pickle.load(er)
+
+# sborka defaultdict: key == ids reactant from patents, value == dicts of key = product from patents, value = stages
+# n = 0
+# pairs = defaultdict(dict)
+# trues = []
+# for x in range(1, 589):
+#     with open(f'bb/{x}.pickle', 'rb') as f:
+#         bbs = pickle.load(f)
+#         print('---', x * 1000, 'go ---')
+#     for mol in bbs:
+#         with db_session:
+#             mol_db = Molecule.find_structure(mol)
+#             # number of stages
+#             stages = 10
+#             if mol_db:
+#                 mol_id = mol_db.id
+#                 if mol_id in df:
+#                     n += 1
+#                     values = df[mol_id]
+#                     stack = []
+#                     seen = set()
+#                     stages -= 1
+#                     for prod in values:
+#                         # update defauldict
+#                         pairs[mol_id].update({prod: abs(stages - 10)})
+#                         if prod not in seen:
+#                             stack.append((prod, stages))
+#                         seen.add(prod)
+#
+#                     while stack:
+#                         mt, st = stack.pop(0)
+#                         st -= 1
+#                         if mt in df:
+#                             val = df[mt]
+#                             for pro in val:
+#                                 # update defauldict
+#                                 pairs[mol_id].update({pro: abs(st - 10)})
+#                                 if pro not in seen:
+#                                     if st:
+#                                         stack.append((pro, st))
+#                                 seen.add(pro)
+#
+#     print('--- finish na ---')
+#     print('--> usego', n)
+
+# dump defauldict of pairs
+# with open('pairs_from_reactant_to_product.pickle', 'wb') as bds:
+#     pickle.dump(pairs, bds)
 #
 #
+# with open('old_to_new_ids.pickle', 'rb') as f1:
+#     old_to_new = pickle.load(f1)
+#
+# with open('array_of_similarity_A.pickle', 'rb') as f2:
+#     big = pickle.load(f2)
+#
+# with open('list_of_A.pickle', 'rb') as we:
+#     sigma = pickle.load(we)
+#
+#
+# def diff(t, n):
+#     upd = 0
+#     diff = len(t) - n
+#     if diff < 0:
+#         upd = - diff
+#     return upd
+#
+#
+# def writer(m_A, t1, t2, num):
+#     unic_tshki_1 = t1 - t2
+#     print('started mols', len(unic_tshki_1), 'to', num)
+#     unic_tshki_2 = t2 - t1
+#     print('u_tshki_2--->', len(unic_tshki_2))
+#     ts = list(unic_tshki_2)
+#     shuffle(ts)
+#     for t_2 in ts[:num + 1]:
+#         with open(f'database/{t_2}.pickle', 'rb') as p2:
+#             fp_2 = pickle.load(p2)
+#         ind = 0
+#         for t_1 in unic_tshki_1:
+#             with open(f'database/{t_1}.pickle', 'rb') as p1:
+#                 fp_1 = pickle.load(p1)
+#             new_ind = evaluation(fp_2, fp_1)
+#             if new_ind > ind:
+#                 ind = new_ind
+#         fw.write(ReactionContainer(reactants=[m_A],
+#                                    products=[Molecule[t_2].structure], meta={'fer': ind / 2}))
+
+
+# with RDFwrite('False_pairs.rdf') as fw:
+#     for i, mol_id_1 in enumerate(sigma):
+#         print(f'-- {i} powel --')
+#         ini = time()
+#         with db_session:
+#             mol_A = Molecule[mol_id_1].structure
+#             high = middle = low = 0
+#             high_mol_id = middle_mol_id = low_mol_id = 0
+#             for mol_id_2 in sigma:
+#                 if mol_id_1 == mol_id_2:
+#                     continue
+#                 ind_tan = big[old_to_new[mol_id_1]][old_to_new[mol_id_2]] / 255
+#                 if .9 <= ind_tan <= 1:
+#                     if ind_tan > high:
+#                         high_mol_id = mol_id_2
+#                         high = ind_tan
+#                 elif .4 <= ind_tan <= .5:
+#                     if ind_tan > middle:
+#                         middle_mol_id = mol_id_2
+#                         middle = ind_tan
+#                 elif 0 < ind_tan <= .1:
+#                     if ind_tan > low:
+#                         low_mol_id = mol_id_2
+#                         low = ind_tan
+#
+#             tshki_1 = pairs[mol_id_1]
+#             total = len(tshki_1)
+#             try:
+#                 tshki_2_h = pairs[high_mol_id]
+#                 tshki_2_m = pairs[middle_mol_id]
+#                 tshki_2_l = pairs[low_mol_id]
+#                 hi = len(tshki_2_h)
+#                 mi = len(tshki_2_m)
+#                 lo = len(tshki_2_l)
+#                 to = hi + mi + lo
+#                 hi = hi / to
+#                 mi = mi / to
+#                 lo = lo / to
+#             except Exception as e:
+#                 print(e)
+#             if high_mol_id:
+#                 print('high', 100 * hi)
+#                 writer(mol_A, tshki_1, tshki_2_h, ceil(total * hi))
+#             if middle_mol_id:
+#                 print('middle', 100 * mi)
+#                 writer(mol_A, tshki_1, tshki_2_m, ceil(total * mi))
+#             if low_mol_id:
+#                 print('low', lo * 100)
+#                 writer(mol_A, tshki_1, tshki_2_l, ceil(total * lo))
+#             print('prowlo', time() - ini)
+#             print(f'-- finish {i} --\n')
+
+# sigma = set(pairs)
+# sigma = list(sigma)
+# print(type(sigma))
+# print(sigma)
+# print(len(sigma))
+#
+# with open('list_of_A.pickle', 'wb') as w0:
+#     pickle.dump(sigma, w0)
+#
+# big = np.eye(len(sigma), dtype=np.uint8)
+# old_to_new = {sigma[0]: 0}
+# new_to_old = {0: sigma[0]}
+# n = 0
+# for i, id_1 in enumerate(sigma):
+#     print(f'--- {i} powel ---')
+#     fp_1 = fps[id_1]
+#     for id_2 in sigma[i+1:]:
+#         fp_2 = fps[id_2]
+#         if not i:
+#             n += 1
+#             old_to_new[id_2] = n
+#             new_to_old[n] = id_2
+#         if not n % 100:
+#             print(f'--- uwlo {n} ---')
+#         ind = evaluation(fp_1, fp_2)
+#         new_id_2 = old_to_new[id_2]
+#         big[i][new_id_2] = big[new_id_2][i] = ind * 255
+# print('finish')
+
+
+# select all data of reactions from database and save pairs of tuples (ids reactant, ids product)
 # reaction_id = 0
 # yse = list()
 # rs = dict()
@@ -115,6 +377,7 @@ with RDFwrite('False_pairs_.rdf') as fw:
 #         print(i * 1000, 'powel')
 #         dt = ale.page(i, 1000)
 #         for t in dt:
+#             # create tuples for every reaction (t[0] = id of reaction)
 #             if reaction_id == t[0]:
 #                 new_t.append(t)
 #             else:
@@ -128,10 +391,12 @@ with RDFwrite('False_pairs_.rdf') as fw:
 #         reacts = []
 #         prodts = []
 #         [prodts.append(m[1]) if m[2] else reacts.append(m[1]) for m in v]
+#         # create all pairs [id reactant, id product]
 #         yse.extend(list(product(reacts, prodts)))
 # with open('right_pairs.pickle', 'rb') as rp:
 #     yse = pickle.load(rp)
-#
+
+# create one step reactions: key == reactant from patents, value == set of products from patents
 # dd = defaultdict(set)
 # for pair in yse:
 #     dd[pair[0]].add(pair[1])
@@ -252,19 +517,19 @@ with RDFwrite('False_pairs_.rdf') as fw:
 #                     except:
 #                         pass
 
-    # n = 0
-    # for signat in mols:
-    #     with db_session:
-    #         mol = list(MoleculeStructure.select(lambda x: x.signature == signat))
-    #         if mol:
-    #             if not n % 100:
-    #                 print(n, 'done')
-    #             m = mol[0].molecule
-    #             try:
-    #                 MoleculeProperties(user=User[1], structure=m, data={'zinc': 1})
-    #             except:
-    #                 pass
-    #             n += 1
+# n = 0
+# for signat in mols:
+#     with db_session:
+#         mol = list(MoleculeStructure.select(lambda x: x.signature == signat))
+#         if mol:
+#             if not n % 100:
+#                 print(n, 'done')
+#             m = mol[0].molecule
+#             try:
+#                 MoleculeProperties(user=User[1], structure=m, data={'zinc': 1})
+#             except:
+#                 pass
+#             n += 1
 
 
 # nu = 0
@@ -299,44 +564,6 @@ with RDFwrite('False_pairs_.rdf') as fw:
 #                             ReactionConditions(user=User[1], structure=ri, data=metaa)
 #             except Exception as e:
 #                 warning(e)
-# n = 0
-# with SDFread('approved_drugs.sdf') as f:
-#     with SDFread('drugs_in_patents_as_product.sdf') as w:
-#         with db_session:
-#             for drug in f:
-#                 drug.standardize()
-#                 drug.implicify_hydrogens()
-#                 try:
-#                     drug.aromatize()
-#                 except:
-#                     print(drug.meta)
-#                 dr_db = Molecule.find_structure(drug)
-#                 if dr_db:
-#                     reactions = dr_db.reactions_entities(pagesize=100, product=True)
-#                     if reactions:
-#                         print(reactions)
-#                         sleep(7)
-#                         w.write(drug)
-#                         n += 1
-#                         print(n)
-# basicConfig(level=ERROR)
-# cycle_ring_error = 2669
-# ideal_drugs = {173: 'antidepressant',
-#                190: 'Antifibrinolytic hemostatic used in severe hemorrhage.',
-#                274: 'A dopamine D2-receptor antagonist',
-#                317: 'Allopurinol is a xanthine oxidase enzyme inhibitor that is considered to be one of the most '
-#                     'effective drugs used to decrease urate levels and is frequently used in the treatment of chronic '
-#                     'gout 6',
-#                337: 'is a drug used to treat hypertension. Prazosin is marketed by Pfizer and was initially approved '
-#                     'by the FDA in 1988 16. It belongs to the class of drugs known as alpha-1 antagonists Label, 8.',
-#                379: 'A non-steroidal anti-inflammatory agent (anti-inflammatory agents, NON-steroidal) similar in mode '
-#                     'of action to indomethacin.',
-#                394: 'Trandolapril may be used to treat mild to moderate hypertension, to improve survival following '
-#                     'myocardial infarction in clinically stable patients with left ventricular dysfunction, as an '
-#                     'adjunct treatment for congestive heart failure, and to slow the rate of progression of renal '
-#                     'disease in hypertensive individuals with diabetes mellitus and microalbuminuria or overt nephropathy.',
-#                1117: 'Bevantolol is a beta-1 adrenoceptor antagonist that has been shown to be as effective as other beta '
-#                      'blockers for the treatment of angina pectoris and hypertension.'}
 # drugs_in_patents_as_product = 447
 # zinc = set()
 # for x in range(1, 1872):
