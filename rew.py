@@ -149,25 +149,28 @@ if __name__ == '__main__':
             t_sh90 = ((iter(set(pairs[new_to_old[n]]) - tshki_1), tshki_1 - set(pairs[new_to_old[n]]), new_to_old[n])
                       for n, x in enumerate(big[new_id]) if x >= 229.5 and new_id != n)
 
-            for triple in islice(unique_everseen(roundrobin2(roundrobin1(t_sh01, t_sh45, t_sh90)), lambda x: x[0]),
-                                 total):
-                t_unic_sh, t_unic, m_A_sh = triple
-                inp.put((id_1, m_A_sh, t_unic_sh))
-            for _ in range(total):
-                print(f'for {i} ||', 'inp-->', inp.qsize(), 'out-->', out.qsize(), 'rank-->', rank, 'file-->', n)
-                dt = out.get()
-                data.append(dt)
-                fw.write(f'{str(dt[0])}, {str(dt[1])}, False, {str(dt[3])}\n')
-                # holost -= 1
-                # if holost <= 0:
-                rank -= 1
-                if not rank:
-                    with open(f'False_pairs/{n}.pickle', 'wb') as wq:
-                        pickle.dump(data, wq)
-                    data = []
-                    n += 1
-                    rank = 1000
-            # print('prowlo', time() - ini, 'sec')
+            if total > 20000:
+                _chunk = ceil(total / 10)
+            for chunk in range(_chunk):
+                for triple in islice(unique_everseen(roundrobin2(roundrobin1(t_sh01, t_sh45, t_sh90)), lambda x: x[0]),
+                                     total):
+                    t_unic_sh, t_unic, m_A_sh = triple
+                    inp.put((id_1, m_A_sh, t_unic_sh))
+                for _ in range(total):
+                    print(f'for {i} ||', 'inp-->', inp.qsize(), 'out-->', out.qsize(), 'rank-->', rank, 'file-->', n)
+                    dt = out.get()
+                    data.append(dt)
+                    fw.write(f'{str(dt[0])}, {str(dt[1])}, False, {str(dt[3])}\n')
+                    # holost -= 1
+                    # if holost <= 0:
+                    rank -= 1
+                    if not rank:
+                        with open(f'False_pairs/{n}.pickle', 'wb') as wq:
+                            pickle.dump(data, wq)
+                        data = []
+                        n += 1
+                        rank = 1000
+                # print('prowlo', time() - ini, 'sec')
 
         for _ in range(20):
             inp.put('STOP')
