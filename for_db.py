@@ -20,14 +20,15 @@ with open('pairs_from_reactant_to_product.pickle', 'rb') as f:
 trues = []
 rank = 1000
 n = 1
-file = 0
-with open('True_pairs.txt', 'w') as w:
+file = 10154
+with open('True_pairs2.txt', 'w') as w:
     for reactant, values in pairs.items():
         with db_session:
-            reactant = str(Molecule[reactant].structure)
+            reactant = Molecule[reactant].structure
             print('tts -->', len(values))
-            for product, stages in values.items():
-                product = str(Molecule[product].structure)
+            for product in Molecule.select(lambda x: x.id in values.keys()):
+                stages = values[product.id]
+                product = product.structure
                 trues.append((reactant, product, True, stages))
                 rank -= 1
                 if not rank:
@@ -36,8 +37,8 @@ with open('True_pairs.txt', 'w') as w:
                     rank = 1000
                     file += 1
                     trues = []
-                w.write(reactant + ', ')
-                w.write(product + ', ')
+                w.write(str(reactant) + ', ')
+                w.write(str(product) + ', ')
                 w.write('True, ')
                 w.write(str(stages) + '\n')
         print('done -->', n, ' file -->', file, ' rank -->', rank)
@@ -214,33 +215,3 @@ def evaluation(query, res):
 #
 #         for _ in range(20):
 #             inp.put('STOP')
-            # try:
-            #     tshki_2_h = pairs[high_mol_id]
-            #     tshki_2_m = pairs[middle_mol_id]
-            #     tshki_2_l = pairs[low_mol_id]
-            #     hi = len(tshki_2_h)
-            #     mi = len(tshki_2_m)
-            #     lo = len(tshki_2_l)
-            #     to = hi + mi + lo
-            #     hi = hi / to
-            #     mi = mi / to
-            #     lo = lo / to
-            # except Exception as e:
-            #     print(e)
-            # balance = 0
-            # if high_mol_id:
-            #     print('high', 100 * hi)
-            #     balance = writer(tshki_1, tshki_2_h, ceil(total * hi))
-            # if middle_mol_id:
-            #     print('middle', 100 * mi)
-            #     if balance:
-            #         balance = writer(tshki_1, tshki_2_m, ceil(total * mi) + balance)
-            #     else:
-            #         balance = writer(tshki_1, tshki_2_m, ceil(total * mi))
-            # if low_mol_id:
-            #     print('low', lo * 100)
-            #     if balance:
-            #         writer(tshki_1, tshki_2_l, ceil(total * lo) + balance)
-            #     else:
-            #         writer(tshki_1, tshki_2_l, ceil(total * lo))
-            # print(f'-- finish {i} --')
