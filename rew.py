@@ -14,7 +14,7 @@ from CGRdb.search.fingerprints import FingerprintMolecule
 from time import sleep, time
 from collections import defaultdict
 from math import ceil
-from random import shuffle
+from random import shuffle, sample
 from os import environ
 import numpy as np
 
@@ -130,7 +130,7 @@ if __name__ == '__main__':
         for _ in range(20):
             Process(target=worker, args=(inp, out, )).start()
 
-        n = 0
+        file = 0
         rank = 1000
         data = []
         # holost = 15700
@@ -141,23 +141,43 @@ if __name__ == '__main__':
             tshki_1 = set(pairs[id_1])
             total = len(tshki_1)
             print('total', total)
-            # ini = time()
-            t_sh01 = ((iter(set(pairs[new_to_old[n]]) - tshki_1), tshki_1 - set(pairs[new_to_old[n]]), new_to_old[n])
-                      for n, x in enumerate(big[new_id]) if x <= 25.5 and new_id != n)
-            t_sh45 = ((iter(set(pairs[new_to_old[n]]) - tshki_1), tshki_1 - set(pairs[new_to_old[n]]), new_to_old[n])
-                      for n, x in enumerate(big[new_id]) if 102 <= x <= 127.5 and new_id != n)
-            t_sh90 = ((iter(set(pairs[new_to_old[n]]) - tshki_1), tshki_1 - set(pairs[new_to_old[n]]), new_to_old[n])
-                      for n, x in enumerate(big[new_id]) if x >= 229.5 and new_id != n)
+            if total > 10000:
+                tshki_1 = set(sample(tshki_1, 10000))
+            # cut T to 10000
+            tsh01 = []
+            tsh45 = []
+            tsh90 = []
+            for n, x in enumerate(big[new_id]):
+                if new_id != n:
+                    if x <= 25.5:
+                        tsh = set(pairs[new_to_old[n]])
+                        if len(tsh) > 10000:
+                            tsh = set(sample(tsh, 10000))
+                        tsh01.append((tsh, new_to_old[n]))
+                    elif 102 <= x <= 127.5:
+                        tsh = set(pairs[new_to_old[n]])
+                        if len(tsh) > 10000:
+                            tsh = set(sample(tsh, 10000))
+                        tsh45.append((tsh, new_to_old[n]))
+                    elif x >= 229.5:
+                        tsh = set(pairs[new_to_old[n]])
+                        if len(tsh) > 10000:
+                            tsh = set(sample(tsh, 10000))
+                        tsh90.append((tsh, new_to_old[n]))
 
-            if total > 20000:
-                _chunk = ceil(total / 10)
-            for chunk in range(_chunk):
-                for triple in islice(unique_everseen(roundrobin2(roundrobin1(t_sh01, t_sh45, t_sh90)), lambda x: x[0]),
-                                     total):
+            t_sh01 = ((iter(tsh - tshki_1), tshki_1 - tsh, idd) for tsh, idd in tsh01)
+            t_sh45 = ((iter(tsh - tshki_1), tshki_1 - tsh, idd) for tsh, idd in tsh45)
+            t_sh90 = ((iter(tsh - tshki_1), tshki_1 - tsh, idd) for tsh, idd in tsh90)
+
+            tot = ceil(total / 10000)
+            for chunk in chunks(cycle((t_sh01, t_sh45, t_sh90)), 10000):
+                tot -= 1
+                ll = len(list(chunk))
+                for triple in unique_everseen(roundrobin2(roundrobin1(*chunk)), lambda z: z[0]):
                     t_unic_sh, t_unic, m_A_sh = triple
                     inp.put((id_1, m_A_sh, t_unic_sh))
-                for _ in range(total):
-                    print(f'for {i} ||', 'inp-->', inp.qsize(), 'out-->', out.qsize(), 'rank-->', rank, 'file-->', n)
+                for _ in range(ll):
+                    print(f'for {i}  ||', 'inp-->', inp.qsize(), 'out-->', out.qsize(), 'rank-->', rank, 'file-->', file)
                     dt = out.get()
                     data.append(dt)
                     fw.write(f'{str(dt[0])}, {str(dt[1])}, False, {str(dt[3])}\n')
@@ -165,16 +185,24 @@ if __name__ == '__main__':
                     # if holost <= 0:
                     rank -= 1
                     if not rank:
-                        with open(f'False_pairs/{n}.pickle', 'wb') as wq:
+                        with open(f'False_pairs/{file}.pickle', 'wb') as wq:
                             pickle.dump(data, wq)
                         data = []
-                        n += 1
+                        file += 1
                         rank = 1000
-                # print('prowlo', time() - ini, 'sec')
+                if not tot:
+                    break
+            # print('prowlo', time() - ini, 'sec')
 
         for _ in range(20):
             inp.put('STOP')
 
+            # t_sh01 = ((iter(set(pairs[new_to_old[n]]) - tshki_1), tshki_1 - set(pairs[new_to_old[n]]), new_to_old[n])
+            #           for n, x in enumerate(big[new_id]) if x <= 25.5 and new_id != n)
+            # t_sh45 = ((iter(set(pairs[new_to_old[n]]) - tshki_1), tshki_1 - set(pairs[new_to_old[n]]), new_to_old[n])
+            #           for n, x in enumerate(big[new_id]) if 102 <= x <= 127.5 and new_id != n)
+            # t_sh90 = ((iter(set(pairs[new_to_old[n]]) - tshki_1), tshki_1 - set(pairs[new_to_old[n]]), new_to_old[n])
+            #           for n, x in enumerate(big[new_id]) if x >= 229.5 and new_id != n)
 
 # all_mols = set(pairs)
 # for k, values in pairs.items():
