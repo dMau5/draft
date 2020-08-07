@@ -27,17 +27,15 @@ with open('set_10_binar', 'rb') as f3:
 def worker(u, o):
     for chn in iter(u.get, 'STOP'):
         chns = []
-        seeen = set()
-        for rule in rules:
-            r_rct = rule.reactants[0]
-            r_pdt = rule.products[0]
-            for y in chn:
-                if y not in seeen:
-                    rct = reduce(or_, y.reactants)
-                    pdt = reduce(or_, y.products)
-                    if r_rct < rct and r_pdt < pdt:
-                        seeen.add(y)
-                        chns.append(1)
+        for y in chn:
+            rct = reduce(or_, y.reactants)
+            pdt = reduce(or_, y.products)
+            for rule in rules:
+                r_rct = rule.reactants[0]
+                r_pdt = rule.products[0]
+                if r_rct < rct and r_pdt < pdt:
+                    chns.append(1)
+                    break
         if len(chns) == len(chn):
             o.put(True)
         else:
